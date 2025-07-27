@@ -23,6 +23,12 @@ export class StagingService {
    * List all hunks in a file
    */
   async listHunks(filePath: string, options?: StageOptions): Promise<string[]> {
+    // Check if file is binary
+    const isBinary = await this.git.isBinary(filePath)
+    if (isBinary) {
+      throw new Error(`Cannot list hunks for binary file: ${filePath}`)
+    }
+    
     // Check if file is untracked and handle it
     const isUntracked = await this.git.isUntracked(filePath)
     if (isUntracked) {
@@ -52,6 +58,12 @@ export class StagingService {
    * Stage a specific hunk by index (1-based)
    */
   async stageHunk(filePath: string, hunkIndex: number, options?: StageOptions): Promise<void> {
+    // Check if file is binary
+    const isBinary = await this.git.isBinary(filePath)
+    if (isBinary) {
+      throw new Error(`Cannot stage hunks for binary file: ${filePath}`)
+    }
+    
     // Check if file is untracked and handle it
     const isUntracked = await this.git.isUntracked(filePath)
     if (isUntracked) {
@@ -102,6 +114,12 @@ export class StagingService {
     endLine: number,
     _options?: StageOptions
   ): Promise<void> {
+    // Check if file is binary
+    const isBinary = await this.git.isBinary(filePath)
+    if (isBinary) {
+      throw new Error(`Cannot stage lines for binary file: ${filePath}`)
+    }
+    
     // Check if file is untracked and handle it
     const isUntracked = await this.git.isUntracked(filePath)
     if (isUntracked) {
