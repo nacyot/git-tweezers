@@ -4,11 +4,11 @@ import { StagingService } from '../services/staging-service.js'
 import { logger, LogLevel } from '../utils/logger.js'
 
 export default class List extends Command {
-  static description = 'List all hunks in a file'
+  static description = 'List all hunks in a file with their line numbers'
 
   static examples = [
     '<%= config.bin %> <%= command.id %> src/index.ts',
-    'PRECISE=1 <%= config.bin %> <%= command.id %> src/index.ts',
+    '<%= config.bin %> <%= command.id %> -p src/index.ts  # Use precise mode for smaller hunks',
   ]
 
   static flags = {

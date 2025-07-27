@@ -4,12 +4,12 @@ import { logger, LogLevel } from '../utils/logger.js'
 import { parseLineRanges, formatRanges } from '../utils/range-parser.js'
 
 export default class Lines extends Command {
-  static description = 'Stage specific lines from a file'
+  static description = 'Stage specific lines or line ranges from a file'
 
   static examples = [
     '<%= config.bin %> <%= command.id %> src/index.ts 10-15',
     '<%= config.bin %> <%= command.id %> src/index.ts 25',
-    '<%= config.bin %> <%= command.id %> src/index.ts 10-15,20,25-30',
+    '<%= config.bin %> <%= command.id %> src/index.ts 10-15,20,25-30  # Multiple ranges',
   ]
 
   static flags = {}

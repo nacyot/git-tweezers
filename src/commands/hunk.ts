@@ -3,12 +3,12 @@ import { StagingService } from '../services/staging-service.js'
 import { logger, LogLevel } from '../utils/logger.js'
 
 export default class Hunk extends Command {
-  static description = 'Stage a specific hunk from a file'
+  static description = 'Stage specific hunks from a file by their numbers'
 
   static examples = [
     '<%= config.bin %> <%= command.id %> src/index.ts 2',
-    'PRECISE=1 <%= config.bin %> <%= command.id %> src/index.ts 1',
-    '<%= config.bin %> <%= command.id %> src/index.ts 1,3,5 # stage multiple hunks',
+    '<%= config.bin %> <%= command.id %> -p src/index.ts 1  # Use precise mode',
+    '<%= config.bin %> <%= command.id %> src/index.ts 1,3,5  # Stage multiple hunks',
   ]
 
   static flags = {
