@@ -32,3 +32,6 @@ coverage/
 
 # oclif
 oclif.manifest.json
+
+# Notes
+.notes/
