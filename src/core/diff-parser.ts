@@ -1,9 +1,10 @@
 import parse, { 
   type AnyFileChange, 
-  type AnyLineChange, 
   type GitDiff,
   type Chunk
 } from 'parse-git-diff'
+import type { ExtendedLineChange } from '../types/extended-diff.js'
+import { DiffAnalyzer } from './diff-analyzer.js'
 
 export interface ParsedHunk {
   index: number
@@ -12,7 +13,7 @@ export interface ParsedHunk {
   oldLines: number
   newStart: number
   newLines: number
-  changes: AnyLineChange[]
+  changes: ExtendedLineChange[]
 }
 
 export interface ParsedFile {
@@ -28,6 +29,9 @@ export class DiffParser {
 
   parseFiles(diffText: string): ParsedFile[] {
     const gitDiff = this.parse(diffText)
+    const eolMap = DiffAnalyzer.analyzeEOL(diffText)
+    
+    let globalChangeIndex = 0
     
     return gitDiff.files.map(file => {
       const oldPath = this.getOldPath(file)
@@ -42,6 +46,19 @@ export class DiffParser {
             // Build header from chunk data
             const header = `@@ -${chunk.fromFileRange.start},${chunk.fromFileRange.lines} +${chunk.toFileRange.start},${chunk.toFileRange.lines} @@`
             
+            // Enhance changes with EOL information
+            const enhancedChanges: ExtendedLineChange[] = chunk.changes
+              .filter(change => change.content !== 'No newline at end of file')
+              .map(change => {
+                const eol = eolMap.get(globalChangeIndex) ?? true // Default to true if not found
+                globalChangeIndex++
+                
+                return {
+                  ...change,
+                  eol
+                } as ExtendedLineChange
+              })
+            
             return {
               index: index + 1, // 1-based index for user-facing
               header,
@@ -49,7 +66,7 @@ export class DiffParser {
               oldLines: chunk.fromFileRange.lines,
               newStart: chunk.toFileRange.start,
               newLines: chunk.toFileRange.lines,
-              changes: chunk.changes,
+              changes: enhancedChanges,
             }
           }),
       }
@@ -108,13 +125,13 @@ export class DiffParser {
     return file.hunks[hunkIndex - 1]
   }
 
-  extractLines(diffText: string, filePath: string, startLine: number, endLine: number): AnyLineChange[] {
+  extractLines(diffText: string, filePath: string, startLine: number, endLine: number): ExtendedLineChange[] {
     const files = this.parseFiles(diffText)
     const file = files.find(f => f.newPath === filePath || f.oldPath === filePath)
     
     if (!file) return []
     
-    const changes: AnyLineChange[] = []
+    const changes: ExtendedLineChange[] = []
     let currentLine = 0
     
     for (const hunk of file.hunks) {

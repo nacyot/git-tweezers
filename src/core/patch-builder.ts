@@ -1,8 +1,8 @@
-import type { AnyLineChange } from 'parse-git-diff'
+import type { ExtendedLineChange } from '../types/extended-diff.js'
 
 export interface HunkData {
   header: string
-  changes: AnyLineChange[]
+  changes: ExtendedLineChange[]
 }
 
 export interface FileData {
@@ -26,12 +26,28 @@ export class PatchBuilder {
       for (const hunk of file.hunks) {
         patches.push(hunk.header)
         
-        for (const change of hunk.changes) {
-          patches.push(this.formatAnyLineChange(change))
+        // Process all changes in the hunk
+        for (let i = 0; i < hunk.changes.length; i++) {
+          const change = hunk.changes[i]
+          patches.push(this.formatLineChange(change))
+          
+          // Check if we need to add a no-newline marker after this change
+          if (!change.eol) {
+            // Only add the marker if this is not a context line that's followed by more changes
+            const nextChange = hunk.changes[i + 1]
+            const shouldAddMarker = 
+              i === hunk.changes.length - 1 || // Last change in hunk
+              (nextChange && nextChange.type !== 'UnchangedLine') // Next change is not context
+            
+            if (shouldAddMarker) {
+              patches.push('\\ No newline at end of file')
+            }
+          }
         }
       }
     }
     
+    // Join with newlines and add final newline
     return patches.join('\n') + '\n'
   }
 
@@ -51,11 +67,11 @@ export class PatchBuilder {
 
   buildLinePatch(
     file: FileData,
-    selectedAnyLineChanges: AnyLineChange[],
+    selectedExtendedLineChanges: ExtendedLineChange[],
     originalHunk: HunkData
   ): string {
     // Rebuild the hunk with only selected changes
-    const rebuiltHunk = this.rebuildHunk(originalHunk, selectedAnyLineChanges)
+    const rebuiltHunk = this.rebuildHunk(originalHunk, selectedExtendedLineChanges)
     
     const fileWithRebuiltHunk: FileData = {
       ...file,
@@ -65,8 +81,8 @@ export class PatchBuilder {
     return this.buildPatch([fileWithRebuiltHunk])
   }
 
-  private rebuildHunk(originalHunk: HunkData, selectedAnyLineChanges: AnyLineChange[]): HunkData {
-    const newAnyLineChanges: AnyLineChange[] = []
+  rebuildHunk(originalHunk: HunkData, selectedExtendedLineChanges: ExtendedLineChange[]): HunkData {
+    const newExtendedLineChanges: ExtendedLineChange[] = []
     let oldCount = 0
     let newCount = 0
     
@@ -79,11 +95,19 @@ export class PatchBuilder {
     const oldStart = parseInt(headerMatch[1], 10)
     const newStart = parseInt(headerMatch[3], 10)
     
+    if (process.env.DEBUG === '1') {
+      console.log(`rebuildHunk: Original hunk has ${originalHunk.changes.length} changes`)
+      console.log(`rebuildHunk: Selected ${selectedExtendedLineChanges.length} changes`)
+    }
+    
     // Process each change
     for (const change of originalHunk.changes) {
-      if (selectedAnyLineChanges.includes(change)) {
+      if (selectedExtendedLineChanges.includes(change)) {
+        if (process.env.DEBUG === '1') {
+          console.log(`  Including selected: ${change.type} "${change.content}" (eol: ${change.eol})`)
+        }
         // Keep this change
-        newAnyLineChanges.push(change)
+        newExtendedLineChanges.push(change)
         
         if (change.type === 'DeletedLine') {
           oldCount++
@@ -97,18 +121,27 @@ export class PatchBuilder {
         // Convert add/delete to context
         if (change.type === 'AddedLine') {
           // Skip adds that we don't want to stage
+          if (process.env.DEBUG === '1') {
+            console.log(`  Skipping unselected add: "${change.content}"`)
+          }
           continue
         } else if (change.type === 'DeletedLine') {
           // Convert delete to context
-          newAnyLineChanges.push({
+          if (process.env.DEBUG === '1') {
+            console.log(`  Converting delete to context: "${change.content}"`)
+          }
+          newExtendedLineChanges.push({
             ...change,
             type: 'UnchangedLine',
-          } as AnyLineChange)
+          } as ExtendedLineChange)
           oldCount++
           newCount++
         } else {
           // Keep context lines
-          newAnyLineChanges.push(change)
+          if (process.env.DEBUG === '1') {
+            console.log(`  Keeping context: "${change.content}"`)
+          }
+          newExtendedLineChanges.push(change)
           oldCount++
           newCount++
         }
@@ -120,12 +153,13 @@ export class PatchBuilder {
     
     return {
       header: newHeader,
-      changes: newAnyLineChanges,
+      changes: newExtendedLineChanges,
     }
   }
 
-  private formatAnyLineChange(change: AnyLineChange): string {
+  private formatLineChange(change: ExtendedLineChange): string {
     const prefix = change.type === 'AddedLine' ? '+' : change.type === 'DeletedLine' ? '-' : ' '
+    // Do NOT add newline here - it will be handled by buildPatch
     return prefix + change.content
   }
 
@@ -133,7 +167,7 @@ export class PatchBuilder {
    * Calculate hunk header from changes
    */
   calculateHunkHeader(
-    changes: AnyLineChange[],
+    changes: ExtendedLineChange[],
     oldStart: number,
     newStart: number
   ): string {
