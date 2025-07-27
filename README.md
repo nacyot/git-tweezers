@@ -26,6 +26,53 @@ npx git-twizer list src/index.ts
 
 ## Usage
 
+### Basic Workflow
+
+```bash
+# 1. Check what changed in a file
+git-twizer list src/index.ts
+# or with npx (no installation needed)
+npx git-twizer list src/index.ts
+
+# Output example:
+# Hunk 1 @ lines 10-20:
+#   function calculate() {
+# -   return a + b;
+# +   return a + b + c;
+#   }
+# 
+# Hunk 2 @ lines 45-50:
+# + function validate(input) {
+# +   return input > 0;
+# + }
+
+# 2. Stage only the bug fix (hunk 1)
+git-twizer hunk src/index.ts 1
+
+# 3. Commit the fix
+git commit -m "fix: include c in calculation"
+
+# 4. Stage the new feature (hunk 2)
+git-twizer hunk src/index.ts 2
+git commit -m "feat: add validation function"
+```
+
+### Using with npx (no installation required)
+
+```bash
+# List hunks
+npx git-twizer list src/components/Button.tsx
+
+# Stage a specific hunk
+npx git-twizer hunk src/components/Button.tsx 2
+
+# Stage specific lines
+npx git-twizer lines src/components/Button.tsx 10-20
+
+# Use precise mode
+npx git-twizer list -p src/components/Button.tsx
+```
+
 ### List hunks in a file
 
 ```bash
@@ -44,6 +91,10 @@ PRECISE=1 git-twizer list src/index.ts
 # Stage a single hunk (1-based index)
 git-twizer hunk src/index.ts 2
 
+# Stage multiple hunks
+git-twizer hunk src/index.ts 1
+git-twizer hunk src/index.ts 3
+
 # Use precise mode for finer control
 git-twizer hunk -p src/index.ts 2
 ```
@@ -56,6 +107,49 @@ git-twizer lines src/index.ts 10-15
 
 # Stage a single line
 git-twizer lines src/index.ts 42
+
+# Stage multiple ranges (run multiple times)
+git-twizer lines src/index.ts 10-15
+git-twizer lines src/index.ts 25-30
+```
+
+### Real-world Example
+
+```bash
+# You've made multiple changes to a component
+$ git diff --stat
+ src/components/Button.tsx | 24 +++++++++++++-----------
+ 
+# See what changed
+$ git-twizer list src/components/Button.tsx
+Hunk 1 @ lines 5-10:
+  import React from 'react';
++ import { useState } from 'react';
+
+Hunk 2 @ lines 15-25:
+  export function Button({ onClick, children }) {
++   const [clicked, setClicked] = useState(false);
+    return (
+-     <button onClick={onClick}>
++     <button onClick={() => { setClicked(true); onClick(); }}>
+        {children}
+      </button>
+
+Hunk 3 @ lines 30-35:
+- // TODO: Add prop types
++ Button.propTypes = {
++   onClick: PropTypes.func.isRequired,
++   children: PropTypes.node
++ };
+
+# Stage only the import and state changes (hunks 1 & 2)
+$ git-twizer hunk src/components/Button.tsx 1
+$ git-twizer hunk src/components/Button.tsx 2
+$ git commit -m "feat: add click tracking to Button"
+
+# Stage the prop types separately
+$ git-twizer hunk src/components/Button.tsx 3
+$ git commit -m "chore: add prop types to Button"
 ```
 
 ## Precise Mode
@@ -89,25 +183,6 @@ npm test
 
 # Run integration tests
 ./test-integration.sh
-```
-
-## API Usage
-
-git-twizer can also be used as a library:
-
-```typescript
-import { StagingService } from 'git-twizer'
-
-const staging = new StagingService()
-
-// List hunks
-const hunks = await staging.listHunks('src/index.ts', { precise: true })
-
-// Stage a hunk
-await staging.stageHunk('src/index.ts', 2)
-
-// Stage specific lines
-await staging.stageLines('src/index.ts', 10, 15)
 ```
 
 ## How it works
