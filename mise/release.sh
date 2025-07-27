@@ -96,7 +96,7 @@ if [[ "$publish_confirm" =~ ^[Yy]$ ]]; then
     if npm publish; then
         echo "✓ Package published successfully to npm"
         echo ""
-        echo "View your package at: https://www.npmjs.com/package/git-twizer"
+        echo "View your package at: https://www.npmjs.com/package/git-tweezers"
     else
         echo "Error: npm publish failed"
         exit 1
@@ -113,4 +113,4 @@ echo "Version $NEW_VERSION has been released."
 echo ""
 echo "Next steps:"
 echo "- Update the changelog if you have one"
-echo "- Create a GitHub release at: https://github.com/nacyot/git-twizer/releases/new"
+echo "- Create a GitHub release at: https://github.com/nacyot/git-tweezers/releases/new"

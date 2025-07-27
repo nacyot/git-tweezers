@@ -11,7 +11,7 @@ describe('Integration Tests', () => {
 
   beforeEach(async () => {
     // Create temporary directory for test repo
-    tempDir = await mkdtemp(join(tmpdir(), 'git-twizer-test-'))
+    tempDir = await mkdtemp(join(tmpdir(), 'git-tweezers-test-'))
     
     // Create staging service instance for the temp directory
     stagingService = new StagingService(tempDir)

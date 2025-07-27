@@ -1,7 +1,7 @@
 #\!/bin/bash
 set -e
 
-echo "=== git-twizer Integration Test ==="
+echo "=== git-tweezers Integration Test ==="
 echo
 
 # Clean up any previous test

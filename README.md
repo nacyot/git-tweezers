@@ -1,4 +1,4 @@
-# git-twizer
+# git-tweezers
 
 Advanced non-interactive git staging tool with hunk and line-level control.
 
@@ -15,13 +15,15 @@ Advanced non-interactive git staging tool with hunk and line-level control.
 ## Installation
 
 ```bash
-npm install -g git-twizer
+npm install -g git-tweezers
 ```
+
+This installs the `tweeze` command globally.
 
 Or use directly with npx:
 
 ```bash
-npx git-twizer list src/index.ts
+npx git-tweezers list src/index.ts
 ```
 
 ## Usage
@@ -30,9 +32,9 @@ npx git-twizer list src/index.ts
 
 ```bash
 # 1. Check what changed in a file
-git-twizer list src/index.ts
+tweeze list src/index.ts
 # or with npx (no installation needed)
-npx git-twizer list src/index.ts
+npx git-tweezers list src/index.ts
 
 # Output example:
 # Hunk 1 @ lines 10-20:
@@ -47,13 +49,13 @@ npx git-twizer list src/index.ts
 # + }
 
 # 2. Stage only the bug fix (hunk 1)
-git-twizer hunk src/index.ts 1
+tweeze hunk src/index.ts 1
 
 # 3. Commit the fix
 git commit -m "fix: include c in calculation"
 
 # 4. Stage the new feature (hunk 2)
-git-twizer hunk src/index.ts 2
+tweeze hunk src/index.ts 2
 git commit -m "feat: add validation function"
 ```
 
@@ -61,54 +63,54 @@ git commit -m "feat: add validation function"
 
 ```bash
 # List hunks
-npx git-twizer list src/components/Button.tsx
+npx git-tweezers list src/components/Button.tsx
 
 # Stage a specific hunk
-npx git-twizer hunk src/components/Button.tsx 2
+npx git-tweezers hunk src/components/Button.tsx 2
 
 # Stage specific lines
-npx git-twizer lines src/components/Button.tsx 10-20
+npx git-tweezers lines src/components/Button.tsx 10-20
 
 # Use precise mode
-npx git-twizer list -p src/components/Button.tsx
+npx git-tweezers list -p src/components/Button.tsx
 ```
 
 ### List hunks in a file
 
 ```bash
 # List hunks with normal context (U3)
-git-twizer list src/index.ts
+tweeze list src/index.ts
 
 # List hunks with precise context (U0) for more granular control
-git-twizer list -p src/index.ts
+tweeze list -p src/index.ts
 ```
 
 ### Stage specific hunks
 
 ```bash
 # Stage a single hunk (1-based index)
-git-twizer hunk src/index.ts 2
+tweeze hunk src/index.ts 2
 
 # Stage multiple hunks
-git-twizer hunk src/index.ts 1
-git-twizer hunk src/index.ts 3
+tweeze hunk src/index.ts 1
+tweeze hunk src/index.ts 3
 
 # Use precise mode for finer control
-git-twizer hunk -p src/index.ts 2
+tweeze hunk -p src/index.ts 2
 ```
 
 ### Stage specific lines
 
 ```bash
 # Stage a range of lines
-git-twizer lines src/index.ts 10-15
+tweeze lines src/index.ts 10-15
 
 # Stage a single line
-git-twizer lines src/index.ts 42
+tweeze lines src/index.ts 42
 
 # Stage multiple ranges (run multiple times)
-git-twizer lines src/index.ts 10-15
-git-twizer lines src/index.ts 25-30
+tweeze lines src/index.ts 10-15
+tweeze lines src/index.ts 25-30
 ```
 
 ### Real-world Example
@@ -119,7 +121,7 @@ $ git diff --stat
  src/components/Button.tsx | 24 +++++++++++++-----------
  
 # See what changed
-$ git-twizer list src/components/Button.tsx
+$ tweeze list src/components/Button.tsx
 Hunk 1 @ lines 5-10:
   import React from 'react';
 + import { useState } from 'react';
@@ -141,18 +143,18 @@ Hunk 3 @ lines 30-35:
 + };
 
 # Stage only the import and state changes (hunks 1 & 2)
-$ git-twizer hunk src/components/Button.tsx 1
-$ git-twizer hunk src/components/Button.tsx 2
+$ tweeze hunk src/components/Button.tsx 1
+$ tweeze hunk src/components/Button.tsx 2
 $ git commit -m "feat: add click tracking to Button"
 
 # Stage the prop types separately
-$ git-twizer hunk src/components/Button.tsx 3
+$ tweeze hunk src/components/Button.tsx 3
 $ git commit -m "chore: add prop types to Button"
 ```
 
 ## Precise Mode
 
-By default, git-twizer uses 3 lines of context (U3) when generating diffs. This provides stable patch application but may group nearby changes into single hunks.
+By default, git-tweezers uses 3 lines of context (U3) when generating diffs. This provides stable patch application but may group nearby changes into single hunks.
 
 Precise mode (U0) uses zero context lines, splitting changes into the smallest possible hunks. This gives you finer control but may fail on complex changes.
 
@@ -162,8 +164,8 @@ Enable precise mode with the `-p` or `--precise` flag.
 
 ```bash
 # Clone the repository
-git clone https://github.com/nacyot/git-twizer.git
-cd git-twizer
+git clone https://github.com/nacyot/git-tweezers.git
+cd git-tweezers
 
 # Install dependencies
 npm install
@@ -183,7 +185,7 @@ npm test
 
 ## How it works
 
-git-twizer uses:
+git-tweezers uses:
 - `parse-git-diff` to parse git diff output into an AST
 - Custom patch builder to reconstruct patches with selected changes
 - `git apply --cached` to apply patches to the staging area
@@ -200,10 +202,10 @@ MIT
 ### "No changes found" error
 - Make sure you're in a git repository
 - Check that the file has unstaged changes with `git status`
-- For new files, git-twizer automatically handles them with `git add -N`
+- For new files, git-tweezers automatically handles them with `git add -N`
 
 ### Debug mode
 Enable debug logging to see what's happening:
 ```bash
-DEBUG=1 git-twizer list src/index.ts
+DEBUG=1 tweeze list src/index.ts
 ```
