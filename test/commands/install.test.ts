@@ -43,7 +43,8 @@ describe('Install Command', () => {
       const { stdout } = await execa('node', [cliPath, 'install', '--force'])
       
       expect(stdout).toContain('Smart-commit template successfully installed')
-      expect(stdout).toContain('.claude/commands/smart-commit.md')
+      // Check for path with either forward or backward slashes
+      expect(stdout).toMatch(/\.claude[/\\]commands[/\\]smart-commit\.md/)
       
       // Check if file was created
       const expectedPath = join(tempDir, '.claude', 'commands', 'smart-commit.md')
