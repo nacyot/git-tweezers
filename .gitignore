@@ -29,6 +29,7 @@ coverage/
 # Temp files
 *.tmp
 .tmp/
+tmp/
 
 # oclif
 oclif.manifest.json
