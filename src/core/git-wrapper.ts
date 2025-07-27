@@ -80,4 +80,32 @@ export class GitWrapper {
   async addIntentToAdd(file: string): Promise<void> {
     await this.execute(['add', '-N', '--', file])
   }
+
+  async isBinary(file: string): Promise<boolean> {
+    try {
+      // Check if file is tracked
+      const isUntracked = await this.isUntracked(file)
+      
+      if (isUntracked) {
+        // For untracked files, check the working tree version
+        // git diff --no-index --numstat /dev/null <file>
+        const output = await this.execute(['diff', '--no-index', '--numstat', '/dev/null', file])
+        // Binary files show as "- - filename"
+        return output.trim().startsWith('-\t-')
+      } else {
+        // For tracked files, check if git considers it binary
+        // git diff --numstat shows binary files as "- - filename"
+        const output = await this.execute(['diff', '--numstat', '--', file])
+        if (output.trim() === '') {
+          // No changes, check the cached version
+          const cachedOutput = await this.execute(['diff', '--cached', '--numstat', '--', file])
+          return cachedOutput.trim().startsWith('-\t-')
+        }
+        return output.trim().startsWith('-\t-')
+      }
+    } catch {
+      // If commands fail, assume it's not binary
+      return false
+    }
+  }
 }
