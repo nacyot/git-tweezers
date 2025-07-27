@@ -41,14 +41,14 @@ jobs:
         run: npm run lint
         if: matrix.os == 'ubuntu-latest' # Only lint once
 
-      - name: Run tests
-        run: npm test
-
       - name: Build project
         run: npm run build
 
-      - name: Verify oclif manifest
+      - name: Generate oclif manifest
         run: npm run prepack
+
+      - name: Run tests
+        run: npm test
 
       # Optional: Upload test results
       - name: Upload test results
