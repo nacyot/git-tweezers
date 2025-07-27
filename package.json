@@ -19,11 +19,13 @@
   "exports": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "bin": {
-    "tweeze": "./bin/run.js"
+    "tweeze": "./bin/run.js",
+    "git-tweezers": "./bin/run.js"
   },
   "files": [
     "/bin",
     "/lib",
+    "/smart-commit.md",
     "/npm-shrinkwrap.json",
     "/oclif.manifest.json"
   ],

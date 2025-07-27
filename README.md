@@ -28,6 +28,23 @@ npx git-tweezers list src/index.ts
 
 ## Usage
 
+### Install Claude Code Command
+
+git-tweezers includes a smart-commit template for Claude Code custom commands:
+
+```bash
+# Install locally in current git repository
+npx git-tweezers install
+
+# Install globally for all projects
+npx git-tweezers install --global
+
+# Force overwrite existing template
+npx git-tweezers install --force
+```
+
+Once installed, you can use `/smart-commit` in Claude Code to create logical commits with precise staging.
+
 ### Basic Workflow
 
 ```bash
