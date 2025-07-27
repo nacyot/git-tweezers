@@ -1,6 +1,7 @@
 import { GitWrapper } from '../core/git-wrapper.js'
-import { DiffParser } from '../core/diff-parser.js'
+import { DiffParser, type ParsedHunk } from '../core/diff-parser.js'
 import { PatchBuilder } from '../core/patch-builder.js'
+import { LineMapper } from '../core/line-mapper.js'
 import type { ExtendedLineChange } from '../types/extended-diff.js'
 
 export interface StageOptions {
@@ -145,70 +146,69 @@ export class StagingService {
       throw new Error(`File not found in diff: ${filePath}`)
     }
     
-    // Collect all changes within the line range
-    // const selectedAnyLineChanges: AnyLineChange[] = []
+    // Collect target line numbers
+    const targetLines = new Set<number>()
+    for (let line = startLine; line <= endLine; line++) {
+      targetLines.add(line)
+    }
+    
+    // Collect all required changes from all hunks
+    const allSelectedChanges: ExtendedLineChange[] = []
     
     for (const hunk of file.hunks) {
-      const selectedChanges: ExtendedLineChange[] = []
-      let tempLine = hunk.newStart
-      let hasSelectedLines = false
+      const requiredChanges = LineMapper.getRequiredChanges(hunk, targetLines)
       
-      // Track which line numbers in the NEW file we want to stage
-      const targetNewLines = new Set<number>()
-      for (let line = startLine; line <= endLine; line++) {
-        targetNewLines.add(line)
-      }
-      
-      // First, figure out which changes affect our target lines
-      const changesByNewLine = new Map<number, ExtendedLineChange>()
-      for (const change of hunk.changes) {
-        if (change.type === 'AddedLine' || change.type === 'UnchangedLine') {
-          changesByNewLine.set(tempLine, change)
-          if (targetNewLines.has(tempLine) && change.type === 'AddedLine') {
-            hasSelectedLines = true
-          }
-          tempLine++
-        }
-      }
-      
-      if (hasSelectedLines) {
-        // Now determine which changes we need to include
-        // For line-level staging of additions, we need to be smart about dependencies
-        const requiredChanges = new Set<ExtendedLineChange>()
-        
-        // Add all changes for lines we want to stage
-        for (const lineNum of targetNewLines) {
-          const change = changesByNewLine.get(lineNum)
-          if (change && change.type === 'AddedLine') {
-            requiredChanges.add(change)
-          }
-        }
-        
-        // For a proper patch, we might need to include related changes
-        // This is a simplified approach - just include the selected additions
-        selectedChanges.push(...Array.from(requiredChanges))
-        
+      if (requiredChanges.length > 0) {
         if (process.env.DEBUG === '1') {
-          console.log(`Selected ${selectedChanges.length} changes for staging`)
-          selectedChanges.forEach(c => console.log(`  ${c.type}: "${c.content}"`))
+          console.log(`Hunk ${hunk.header}: Selected ${requiredChanges.length} changes`)
+          requiredChanges.forEach(c => console.log(`  ${c.type}: "${c.content}" (eol: ${c.eol})`))
         }
         
-        // Use buildLinePatch which properly handles the rebuilding
-        const patch = this.builder.buildLinePatch(file, selectedChanges, hunk)
-        
-        if (process.env.DEBUG === '1') {
-          console.log('Generated patch:')
-          console.log(patch)
-        }
-        
-        // Apply this hunk's patch
-        await this.git.applyWithOptions(patch, ['--cached', '--recount'])
-        return // Only process first matching hunk for now
+        allSelectedChanges.push(...requiredChanges)
       }
     }
     
-    // If we get here, no changes were found
-    throw new Error(`No changes found in lines ${startLine}-${endLine}`)
+    if (allSelectedChanges.length === 0) {
+      throw new Error(`No changes found in lines ${startLine}-${endLine}`)
+    }
+    
+    // Build a single patch with all selected changes
+    // Group changes back by hunk for proper patch generation
+    const hunkGroups = new Map<ParsedHunk, ExtendedLineChange[]>()
+    
+    for (const hunk of file.hunks) {
+      const hunkChanges = allSelectedChanges.filter(change => 
+        hunk.changes.includes(change)
+      )
+      if (hunkChanges.length > 0) {
+        hunkGroups.set(hunk, hunkChanges)
+      }
+    }
+    
+    // Build hunks for the patch
+    const rebuiltHunks: Array<{ header: string; changes: ExtendedLineChange[] }> = []
+    
+    for (const [hunk, changes] of hunkGroups) {
+      const rebuiltHunk = this.builder.rebuildHunk(hunk, changes)
+      rebuiltHunks.push(rebuiltHunk)
+    }
+    
+    // Create final patch
+    const fileData = {
+      oldPath: file.oldPath,
+      newPath: file.newPath,
+      hunks: rebuiltHunks,
+    }
+    
+    const patch = this.builder.buildPatch([fileData])
+    
+    if (process.env.DEBUG === '1') {
+      console.log('Generated patch:')
+      console.log(patch)
+    }
+    
+    // Apply with recount option for better reliability
+    await this.git.applyWithOptions(patch, ['--cached', '--recount'])
   }
 
   /**
