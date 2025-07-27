@@ -1,8 +1,15 @@
 {
   "name": "git-twizer",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Advanced git staging tool with hunk and line-level control",
-  "keywords": ["git", "staging", "hunk", "line", "patch", "diff"],
+  "keywords": [
+    "git",
+    "staging",
+    "hunk",
+    "line",
+    "patch",
+    "diff"
+  ],
   "homepage": "https://github.com/nacyot/git-twizer",
   "bugs": "https://github.com/nacyot/git-twizer/issues",
   "repository": "nacyot/git-twizer",
