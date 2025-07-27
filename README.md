@@ -81,8 +81,6 @@ git-twizer list src/index.ts
 
 # List hunks with precise context (U0) for more granular control
 git-twizer list -p src/index.ts
-# or
-PRECISE=1 git-twizer list src/index.ts
 ```
 
 ### Stage specific hunks
@@ -158,9 +156,7 @@ By default, git-twizer uses 3 lines of context (U3) when generating diffs. This 
 
 Precise mode (U0) uses zero context lines, splitting changes into the smallest possible hunks. This gives you finer control but may fail on complex changes.
 
-Enable precise mode with:
-- `-p` or `--precise` flag
-- `PRECISE=1` environment variable
+Enable precise mode with the `-p` or `--precise` flag.
 
 ## Development
 
