@@ -1,7 +1,7 @@
 import { GitWrapper } from '../core/git-wrapper.js'
 import { DiffParser } from '../core/diff-parser.js'
 import { PatchBuilder } from '../core/patch-builder.js'
-import type { AnyLineChange } from 'parse-git-diff'
+import type { ExtendedLineChange } from '../types/extended-diff.js'
 
 export interface StageOptions {
   precise?: boolean // Use U0 context for finer control
@@ -100,6 +100,11 @@ export class StagingService {
     
     const patch = this.builder.buildPatch([fileData])
     
+    if (process.env.DEBUG === '1') {
+      console.log('Generated patch:')
+      console.log(patch)
+    }
+    
     // Apply the patch
     const applyOptions = options?.precise ? ['--cached', '--unidiff-zero'] : ['--cached']
     await this.git.applyWithOptions(patch, applyOptions)
@@ -142,52 +147,68 @@ export class StagingService {
     
     // Collect all changes within the line range
     // const selectedAnyLineChanges: AnyLineChange[] = []
-    const selectedHunks: Array<{ header: string; changes: AnyLineChange[] }> = []
-    
-    let currentLine = 0
     
     for (const hunk of file.hunks) {
-      currentLine = hunk.newStart
-      const hunkAnyLineChanges: AnyLineChange[] = []
+      const selectedChanges: ExtendedLineChange[] = []
+      let tempLine = hunk.newStart
+      let hasSelectedLines = false
       
+      // Track which line numbers in the NEW file we want to stage
+      const targetNewLines = new Set<number>()
+      for (let line = startLine; line <= endLine; line++) {
+        targetNewLines.add(line)
+      }
+      
+      // First, figure out which changes affect our target lines
+      const changesByNewLine = new Map<number, ExtendedLineChange>()
       for (const change of hunk.changes) {
         if (change.type === 'AddedLine' || change.type === 'UnchangedLine') {
-          if (currentLine >= startLine && currentLine <= endLine && change.type === 'AddedLine') {
-            hunkAnyLineChanges.push(change)
+          changesByNewLine.set(tempLine, change)
+          if (targetNewLines.has(tempLine) && change.type === 'AddedLine') {
+            hasSelectedLines = true
           }
-          currentLine++
-        } else if (change.type === 'DeletedLine') {
-          // For deletes, we need to check if they're in range based on old line numbers
-          // For simplicity, include all deletes in hunks that have selected adds
-          if (hunkAnyLineChanges.length > 0 || (currentLine >= startLine && currentLine <= endLine)) {
-            hunkAnyLineChanges.push(change)
-          }
+          tempLine++
         }
       }
       
-      if (hunkAnyLineChanges.length > 0) {
-        selectedHunks.push({
-          header: hunk.header,
-          changes: hunkAnyLineChanges,
-        })
+      if (hasSelectedLines) {
+        // Now determine which changes we need to include
+        // For line-level staging of additions, we need to be smart about dependencies
+        const requiredChanges = new Set<ExtendedLineChange>()
+        
+        // Add all changes for lines we want to stage
+        for (const lineNum of targetNewLines) {
+          const change = changesByNewLine.get(lineNum)
+          if (change && change.type === 'AddedLine') {
+            requiredChanges.add(change)
+          }
+        }
+        
+        // For a proper patch, we might need to include related changes
+        // This is a simplified approach - just include the selected additions
+        selectedChanges.push(...Array.from(requiredChanges))
+        
+        if (process.env.DEBUG === '1') {
+          console.log(`Selected ${selectedChanges.length} changes for staging`)
+          selectedChanges.forEach(c => console.log(`  ${c.type}: "${c.content}"`))
+        }
+        
+        // Use buildLinePatch which properly handles the rebuilding
+        const patch = this.builder.buildLinePatch(file, selectedChanges, hunk)
+        
+        if (process.env.DEBUG === '1') {
+          console.log('Generated patch:')
+          console.log(patch)
+        }
+        
+        // Apply this hunk's patch
+        await this.git.applyWithOptions(patch, ['--cached', '--recount'])
+        return // Only process first matching hunk for now
       }
     }
     
-    if (selectedHunks.length === 0) {
-      throw new Error(`No changes found in lines ${startLine}-${endLine}`)
-    }
-    
-    // Build patch with selected hunks
-    const fileData = {
-      oldPath: file.oldPath,
-      newPath: file.newPath,
-      hunks: selectedHunks,
-    }
-    
-    const patch = this.builder.buildPatch([fileData])
-    
-    // Apply with recount option for better reliability
-    await this.git.applyWithOptions(patch, ['--cached', '--recount'])
+    // If we get here, no changes were found
+    throw new Error(`No changes found in lines ${startLine}-${endLine}`)
   }
 
   /**
@@ -231,6 +252,11 @@ export class StagingService {
     }
     
     const patch = this.builder.buildPatch([fileData])
+    
+    if (process.env.DEBUG === '1') {
+      console.log('Generated patch:')
+      console.log(patch)
+    }
     
     // Apply the patch
     const applyOptions = options?.precise ? ['--cached', '--unidiff-zero'] : ['--cached']
