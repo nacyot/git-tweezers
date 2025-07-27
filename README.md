@@ -1,11 +1,12 @@
 # git-twizer
 
-Advanced git staging tool with hunk and line-level control.
+Advanced non-interactive git staging tool with hunk and line-level control.
 
 ## Features
 
+- 🚀 **Non-interactive**: Direct commands for automation and scripting
 - 🎯 **Hunk-level staging**: Stage specific hunks from your changes
-- 📏 **Line-level staging**: Stage individual lines or line ranges (NEW!)
+- 📏 **Line-level staging**: Stage individual lines or line ranges
 - 🔍 **Precise mode**: Use U0 context for finer control over change boundaries
 - 🌈 **Colorful output**: Clear visual feedback with colored output
 - 📄 **Untracked file support**: Stage parts of new files
@@ -123,10 +124,6 @@ For line-level staging, it uses the "U0 trick": generating diffs with zero conte
 
 MIT
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
 ## Troubleshooting
 
 ### "No changes found" error
@@ -139,9 +136,3 @@ Enable debug logging to see what's happening:
 ```bash
 DEBUG=1 git-twizer list src/index.ts
 ```
-
-## Credits
-
-Inspired by:
-- [Magit](https://magit.vc/) - The magical Git interface for Emacs
-- [git add -p](https://git-scm.com/docs/git-add#Documentation/git-add.txt--p) - Git's interactive staging
