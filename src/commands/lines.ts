@@ -45,14 +45,18 @@ export default class Lines extends Command {
       // Parse line ranges
       const ranges = parseLineRanges(args.range)
       
-      logger.info(`Staging lines ${formatRanges(ranges)} from ${args.file}`)
+      if (!dryRun) {
+        logger.info(`Staging lines ${formatRanges(ranges)} from ${args.file}`)
+      }
       
       // Stage each range
       for (const range of ranges) {
-        await staging.stageLines(args.file, range.start, range.end)
+        await staging.stageLines(args.file, range.start, range.end, { dryRun })
       }
       
-      logger.success(`Staged lines ${formatRanges(ranges)} from ${args.file}`)
+      if (!dryRun) {
+        logger.success(`Staged lines ${formatRanges(ranges)} from ${args.file}`)
+      }
       
     } catch (error) {
       logger.error(error instanceof Error ? error.message : String(error))

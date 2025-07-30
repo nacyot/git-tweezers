@@ -129,7 +129,6 @@ export class StagingService {
     
     const patch = this.builder.buildPatch([fileData])
     
-    if (process.env.DEBUG === '1') {
     if (process.env.DEBUG === '1' || options?.dryRun) {
       console.log('Generated patch:')
       console.log(patch)
@@ -140,9 +139,11 @@ export class StagingService {
       console.log('\n[DRY RUN] The above patch would be applied to the staging area.')
       return
     }
+    
     // Apply the patch
     const applyOptions = options?.precise ? ['--cached', '--unidiff-zero'] : ['--cached']
     await this.git.applyWithOptions(patch, applyOptions)
+    
     // Record in history
     this.cache.addHistory({
       patch,
@@ -243,7 +244,6 @@ export class StagingService {
     
     const patch = this.builder.buildPatch([fileData])
     
-    if (process.env.DEBUG === '1') {
     if (process.env.DEBUG === '1' || _options?.dryRun) {
       console.log('Generated patch:')
       console.log(patch)
@@ -254,8 +254,10 @@ export class StagingService {
       console.log('\n[DRY RUN] The above patch would be applied to the staging area.')
       return
     }
+    
     // Apply with recount option for better reliability
     await this.git.applyWithOptions(patch, ['--cached', '--recount'])
+    
     // Record in history
     this.cache.addHistory({
       patch,
@@ -318,7 +320,6 @@ export class StagingService {
     
     const patch = this.builder.buildPatch([fileData])
     
-    if (process.env.DEBUG === '1') {
     if (process.env.DEBUG === '1' || options?.dryRun) {
       console.log('Generated patch:')
       console.log(patch)
@@ -329,9 +330,11 @@ export class StagingService {
       console.log('\n[DRY RUN] The above patch would be applied to the staging area.')
       return
     }
+    
     // Apply the patch
     const applyOptions = options?.precise ? ['--cached', '--unidiff-zero'] : ['--cached']
     await this.git.applyWithOptions(patch, applyOptions)
+    
     // Record in history
     this.cache.addHistory({
       patch,
