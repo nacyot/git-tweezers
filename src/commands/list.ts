@@ -63,7 +63,7 @@ export default class List extends Command {
     }
     
     try {
-      const staging = new StagingService()
+      const staging = new StagingService(process.cwd())
       const renderer = new DiffRenderer()
       const git = new GitWrapper()
       

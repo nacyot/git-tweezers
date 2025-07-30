@@ -40,7 +40,7 @@ export default class Lines extends Command {
     }
     
     try {
-      const staging = new StagingService()
+      const staging = new StagingService(process.cwd())
       
       // Parse line ranges
       const ranges = parseLineRanges(args.range)

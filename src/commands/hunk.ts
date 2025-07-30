@@ -48,7 +48,7 @@ export default class Hunk extends Command {
     }
     
     try {
-      const staging = new StagingService()
+      const staging = new StagingService(process.cwd())
       
       // Parse arguments to extract file and hunk selectors
       const fileHunks = new Map<string, string[]>()
