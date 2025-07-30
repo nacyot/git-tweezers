@@ -43,9 +43,7 @@ export class DiffAnalyzer {
       const hasEOL = !this.hasNoNewlineMarker(lines, i)
       eolMap.set(changeLineIndex, hasEOL)
       
-      if (process.env.DEBUG === '1') {
-        console.log(`Line ${i}: "${line}" -> changeIndex: ${changeLineIndex}, hasEOL: ${hasEOL}`)
-      }
+      // Removed debug logging that was interfering with output
       
       changeLineIndex++
       
