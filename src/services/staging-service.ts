@@ -241,7 +241,7 @@ export class StagingService {
   /**
    * Stage multiple hunks at once
    */
-  async stageHunks(filePath: string, hunkIndices: number[], options?: StageOptions): Promise<void> {
+  async stageHunks(filePath: string, hunkSelectors: Array<number | string>, options?: StageOptions): Promise<void> {
     const context = options?.precise ? 0 : 3
     const diff = await this.git.diff(filePath, context)
     
@@ -249,33 +249,44 @@ export class StagingService {
       throw new Error(`No changes found for file: ${filePath}`)
     }
     
-    const files = this.parser.parseFiles(diff)
+    const files = this.parser.parseFilesWithInfo(diff)
     const file = files.find(f => f.newPath === filePath || f.oldPath === filePath)
     
     if (!file) {
       throw new Error(`File not found in diff: ${filePath}`)
     }
     
-    // Validate all indices
-    for (const index of hunkIndices) {
-      if (index < 1 || index > file.hunks.length) {
-        throw new Error(`Hunk index ${index} out of range. File has ${file.hunks.length} hunks.`)
+    // Map hunks with cache
+    const hunks = this.cache.mapHunks(filePath, file.hunks)
+    
+    // Find all selected hunks
+    const selectedHunks: HunkInfo[] = []
+    const notFoundSelectors: Array<number | string> = []
+    
+    for (const selector of hunkSelectors) {
+      const hunk = this.cache.findHunk(hunks, selector)
+      if (hunk) {
+        selectedHunks.push(hunk)
+      } else {
+        notFoundSelectors.push(selector)
       }
     }
     
-    // Collect selected hunks
-    const selectedHunks = hunkIndices.map(index => {
-      const hunk = file.hunks[index - 1]
-      return {
-        header: hunk.header,
-        changes: hunk.changes,
-      }
-    })
+    if (notFoundSelectors.length > 0) {
+      throw new StagingError(
+        `Hunks not found: ${notFoundSelectors.join(', ')}. File has ${hunks.length} hunks.`,
+        hunks
+      )
+    }
     
+    // Build patch with selected hunks
     const fileData = {
       oldPath: file.oldPath,
       newPath: file.newPath,
-      hunks: selectedHunks,
+      hunks: selectedHunks.map(hunk => ({
+        header: hunk.header,
+        changes: hunk.changes,
+      })),
     }
     
     const patch = this.builder.buildPatch([fileData])
