@@ -141,7 +141,12 @@ export class GitWrapper {
       const result = execaSync('git', ['rev-parse', '--git-dir'], {
         cwd: this.cwd,
       })
-      return result.stdout.trim()
+      const gitDir = result.stdout.trim()
+      // If relative path, make it absolute
+      if (!gitDir.startsWith('/') && !gitDir.startsWith('\\') && !gitDir.match(/^[A-Z]:/)) {
+        return join(this.cwd || process.cwd(), gitDir)
+      }
+      return gitDir
     } catch {
       // Fall back to .git in current directory if git command fails
       return join(this.cwd || process.cwd(), '.git')
