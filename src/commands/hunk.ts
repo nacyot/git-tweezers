@@ -21,6 +21,11 @@ export default class Hunk extends Command {
       description: 'Use precise mode (U0 context) for finer control',
       default: false,
     }),
+    'dry-run': Flags.boolean({
+      char: 'd',
+      description: 'Show what would be staged without applying changes',
+      default: false,
+    }),
   }
 
   static args = {
@@ -36,6 +41,7 @@ export default class Hunk extends Command {
     const { argv, flags } = await this.parse(Hunk)
     
     const precise = flags.precise
+    const dryRun = flags['dry-run']
     
     if (process.env.DEBUG === '1') {
       logger.setLevel(LogLevel.DEBUG)
@@ -103,11 +109,15 @@ export default class Hunk extends Command {
       // Stage hunks for each file
       for (const [file, selectors] of fileHunks) {
         if (selectors.length === 1) {
-          await staging.stageHunk(file, selectors[0], { precise })
-          logger.success(`Staged hunk ${selectors[0]} from ${file}`)
+          await staging.stageHunk(file, selectors[0], { precise, dryRun })
+          if (!dryRun) {
+            logger.success(`Staged hunk ${selectors[0]} from ${file}`)
+          }
         } else {
-          await staging.stageHunks(file, selectors, { precise })
-          logger.success(`Staged hunks ${selectors.join(', ')} from ${file}`)
+          await staging.stageHunks(file, selectors, { precise, dryRun })
+          if (!dryRun) {
+            logger.success(`Staged hunks ${selectors.join(', ')} from ${file}`)
+          }
         }
       }
       

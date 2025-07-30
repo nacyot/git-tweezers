@@ -10,6 +10,7 @@ import { StagingError } from '../utils/staging-error.js'
 export interface StageOptions {
   precise?: boolean // Use U0 context for finer control
   cwd?: string
+  dryRun?: boolean // Show what would be staged without applying
 }
 
 export class StagingService {
@@ -129,10 +130,16 @@ export class StagingService {
     const patch = this.builder.buildPatch([fileData])
     
     if (process.env.DEBUG === '1') {
+    if (process.env.DEBUG === '1' || options?.dryRun) {
       console.log('Generated patch:')
       console.log(patch)
     }
     
+    // In dry-run mode, skip applying the patch
+    if (options?.dryRun) {
+      console.log('\n[DRY RUN] The above patch would be applied to the staging area.')
+      return
+    }
     // Apply the patch
     const applyOptions = options?.precise ? ['--cached', '--unidiff-zero'] : ['--cached']
     await this.git.applyWithOptions(patch, applyOptions)
@@ -230,10 +237,16 @@ export class StagingService {
     const patch = this.builder.buildPatch([fileData])
     
     if (process.env.DEBUG === '1') {
+    if (process.env.DEBUG === '1' || _options?.dryRun) {
       console.log('Generated patch:')
       console.log(patch)
     }
     
+    // In dry-run mode, skip applying the patch
+    if (_options?.dryRun) {
+      console.log('\n[DRY RUN] The above patch would be applied to the staging area.')
+      return
+    }
     // Apply with recount option for better reliability
     await this.git.applyWithOptions(patch, ['--cached', '--recount'])
   }
@@ -292,10 +305,16 @@ export class StagingService {
     const patch = this.builder.buildPatch([fileData])
     
     if (process.env.DEBUG === '1') {
+    if (process.env.DEBUG === '1' || options?.dryRun) {
       console.log('Generated patch:')
       console.log(patch)
     }
     
+    // In dry-run mode, skip applying the patch
+    if (options?.dryRun) {
+      console.log('\n[DRY RUN] The above patch would be applied to the staging area.')
+      return
+    }
     // Apply the patch
     const applyOptions = options?.precise ? ['--cached', '--unidiff-zero'] : ['--cached']
     await this.git.applyWithOptions(patch, applyOptions)

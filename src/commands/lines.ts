@@ -1,4 +1,4 @@
-import { Command, Args } from '@oclif/core'
+import { Command, Args, Flags } from '@oclif/core'
 import { StagingService } from '../services/staging-service.js'
 import { logger, LogLevel } from '../utils/logger.js'
 import { parseLineRanges, formatRanges } from '../utils/range-parser.js'
@@ -12,7 +12,13 @@ export default class Lines extends Command {
     '<%= config.bin %> <%= command.id %> src/index.ts 10-15,20,25-30  # Multiple ranges',
   ]
 
-  static flags = {}
+  static flags = {
+    'dry-run': Flags.boolean({
+      char: 'd',
+      description: 'Show what would be staged without applying changes',
+      default: false,
+    }),
+  }
 
   static args = {
     file: Args.string({
@@ -26,7 +32,8 @@ export default class Lines extends Command {
   }
 
   async run(): Promise<void> {
-    const { args } = await this.parse(Lines)
+    const { args, flags } = await this.parse(Lines)
+    const dryRun = flags['dry-run']
     
     if (process.env.DEBUG === '1') {
       logger.setLevel(LogLevel.DEBUG)
