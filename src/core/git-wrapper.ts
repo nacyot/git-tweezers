@@ -1,4 +1,5 @@
 import { execa, execaSync, type Options as ExecaOptions } from 'execa'
+import { join } from 'path'
 
 export interface GitOptions extends ExecaOptions {
   cwd?: string
@@ -132,6 +133,18 @@ export class GitWrapper {
     } catch {
       // Fall back to current directory if git command fails
       return this.cwd || process.cwd()
+    }
+  }
+
+  getGitDir(): string {
+    try {
+      const result = execaSync('git', ['rev-parse', '--git-dir'], {
+        cwd: this.cwd,
+      })
+      return result.stdout.trim()
+    } catch {
+      // Fall back to .git in current directory if git command fails
+      return join(this.cwd || process.cwd(), '.git')
     }
   }
 }

@@ -33,8 +33,8 @@ export class HunkCacheService {
   
   constructor(cwd?: string) {
     this.git = new GitWrapper(cwd)
-    const gitRoot = this.git.getGitRoot()
-    this.cachePath = join(gitRoot, '.git', 'tweezers-cache.json')
+    const gitDir = this.git.getGitDir()
+    this.cachePath = join(gitDir, 'tweezers-cache.json')
     this.cacheData = this.loadCache()
   }
   
