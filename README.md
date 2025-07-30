@@ -14,6 +14,8 @@ Advanced non-interactive git staging tool with hunk and line-level control.
 - 🆔 **Stable Hunk IDs**: Consistent hunk identification across multiple commands
 - 👀 **Diff Preview**: View actual changes before staging
 - 📁 **Multi-file Support**: Stage hunks from multiple files in one command
+- 🔬 **Dry-run Mode**: Preview what would be staged without applying changes
+- ↩️ **Undo Support**: Reverse your last staging operations
 
 ## Installation
 
@@ -55,6 +57,8 @@ Once installed, you can use `/smart-commit` in Claude Code to create logical com
 - **Preview Mode**: Use `--preview` to see full diff content before staging
 - **Multi-file Support**: Stage hunks from multiple files in one command: `tweeze hunk file1.ts:1 file2.ts:3`
 - **Better Error Messages**: When staging fails, see all remaining hunks with their IDs and summaries
+- **Dry-run Mode**: Use `--dry-run` flag to preview patches without applying them
+- **Undo Command**: Reverse recent staging operations with `tweeze undo`
 
 ### Basic Workflow
 
@@ -151,6 +155,38 @@ tweeze lines src/index.ts 42
 # Stage multiple ranges (run multiple times)
 tweeze lines src/index.ts 10-15
 tweeze lines src/index.ts 25-30
+```
+
+### Dry-run mode
+
+Preview what would be staged without actually applying changes:
+
+```bash
+# Preview a hunk staging
+tweeze hunk src/index.ts 1 --dry-run
+tweeze hunk src/index.ts 1 -d  # Short form
+
+# Preview line staging
+tweeze lines src/index.ts 10-15 --dry-run
+
+# Works with all staging commands
+tweeze hunk src/file1.ts:1 src/file2.ts:3 --dry-run
+```
+
+### Undo staging operations
+
+Reverse your recent staging operations:
+
+```bash
+# Undo the most recent staging
+tweeze undo
+
+# View staging history
+tweeze undo --list
+tweeze undo -l  # Short form
+
+# Undo a specific operation (0 = most recent)
+tweeze undo --step 2  # Undo the 3rd most recent staging
 ```
 
 ### Real-world Example
