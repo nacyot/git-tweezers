@@ -1,6 +1,6 @@
 {
   "name": "git-tweezers",
-  "version": "0.1.8",
+  "version": "0.1.10",
   "description": "Advanced git staging tool with hunk and line-level control",
   "keywords": [
     "git",
