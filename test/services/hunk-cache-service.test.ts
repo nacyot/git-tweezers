@@ -131,4 +131,77 @@ describe('HunkCacheService', () => {
       expect(mapped[0].id).toBe('new1')
     })
   })
+
+  describe('history management', () => {
+    it('should add history entries', () => {
+      const historyEntry = {
+        patch: 'diff --git a/test.js b/test.js',
+        files: ['test.js'],
+        selectors: ['1'],
+        description: 'Test staging',
+      }
+      
+      service.addHistory(historyEntry)
+      
+      const history = service.getHistory()
+      expect(history).toHaveLength(1)
+      expect(history[0].patch).toBe(historyEntry.patch)
+      expect(history[0].description).toBe(historyEntry.description)
+      expect(history[0].id).toBeDefined()
+      expect(history[0].timestamp).toBeDefined()
+    })
+
+    it('should get specific history entry', () => {
+      const entry1 = {
+        patch: 'patch1',
+        files: ['file1.js'],
+        selectors: ['1'],
+      }
+      const entry2 = {
+        patch: 'patch2',
+        files: ['file2.js'],
+        selectors: ['2'],
+      }
+      
+      service.addHistory(entry1)
+      service.addHistory(entry2)
+      
+      const retrieved = service.getHistoryEntry(0)
+      expect(retrieved?.patch).toBe('patch2') // Most recent
+      
+      const retrieved2 = service.getHistoryEntry(1)
+      expect(retrieved2?.patch).toBe('patch1')
+    })
+
+    it('should remove history entry', () => {
+      const entry = {
+        patch: 'patch',
+        files: ['file.js'],
+        selectors: ['1'],
+      }
+      
+      service.addHistory(entry)
+      expect(service.getHistory()).toHaveLength(1)
+      
+      service.removeHistoryEntry(0)
+      expect(service.getHistory()).toHaveLength(0)
+    })
+
+    it('should maintain max 20 history entries', () => {
+      // Add 25 entries
+      for (let i = 0; i < 25; i++) {
+        service.addHistory({
+          patch: `patch${i}`,
+          files: [`file${i}.js`],
+          selectors: [String(i)],
+        })
+      }
+      
+      const history = service.getHistory()
+      expect(history).toHaveLength(20)
+      // Should keep the most recent 20
+      expect(history[0].patch).toBe('patch24')
+      expect(history[19].patch).toBe('patch5')
+    })
+  })
 })
