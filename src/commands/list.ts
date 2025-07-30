@@ -23,17 +23,23 @@ export default class List extends Command {
       default: false,
     }),
     preview: Flags.boolean({
-      description: 'Show full diff preview for each hunk',
+      description: 'Show full diff preview for each hunk (legacy flag, now default behavior)',
       default: false,
+      hidden: true,
     }),
     inline: Flags.boolean({
       char: 'i',
       description: 'Show inline summary with stats and first changed line',
       default: false,
     }),
+    oneline: Flags.boolean({
+      char: 'o',
+      description: 'Show only hunk headers without preview (like git log --oneline)',
+      default: false,
+    }),
     context: Flags.integer({
       char: 'c',
-      description: 'Number of context lines to show (with --preview)',
+      description: 'Number of context lines to show in preview',
       default: 3,
     }),
   }
@@ -75,8 +81,10 @@ export default class List extends Command {
         files = argv as string[]
       }
       
-      const showPreview = flags.preview
-      const showInline = flags.inline || (!flags.preview && !flags.inline) // Default to inline if no option
+      // New behavior: show preview by default unless --oneline is used
+      // Legacy --preview flag is also respected if explicitly used
+      const showPreview = flags.preview || (!flags.oneline && !flags.inline)
+      const showInline = flags.inline || (flags.oneline && !flags.preview)
       let hasChanges = false
       
       for (const file of files) {
