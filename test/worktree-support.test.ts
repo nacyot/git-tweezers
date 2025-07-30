@@ -25,7 +25,7 @@ describe('Worktree Support', () => {
     
     // Create initial commit
     const testFile = join(mainRepoDir, 'test.js')
-    await writeFile(testFile, 'console.log("hello")')
+    await writeFile(testFile, 'console.log("hello")\n')
     await execa('git', ['add', '.'], { cwd: mainRepoDir })
     await execa('git', ['commit', '-m', 'Initial commit'], { cwd: mainRepoDir })
     
@@ -93,10 +93,15 @@ describe('Worktree Support', () => {
     it('should list changes in worktree', async () => {
       // Make a change in worktree
       const testFile = join(worktreeDir, 'test.js')
-      await writeFile(testFile, 'console.log("hello")\nconsole.log("world")')
+      await writeFile(testFile, 'console.log("hello")\nconsole.log("world")\n')
       
-      // Run list command using npx
-      const result = await execa('npx', ['git-tweezers', 'list', 'test.js'], { cwd: worktreeDir })
+      // Verify the file exists and has changes
+      const diffResult = await execa('git', ['diff', 'test.js'], { cwd: worktreeDir })
+      expect(diffResult.stdout).toBeTruthy()
+      
+      // Run list command directly
+      const binPath = join(process.cwd(), 'bin', 'run.js')
+      const result = await execa('node', [binPath, 'list', 'test.js'], { cwd: worktreeDir })
       
       expect(result.stdout).toContain('test.js:')
       expect(result.stdout).toContain('[1|')
@@ -107,8 +112,9 @@ describe('Worktree Support', () => {
       const testFile = join(worktreeDir, 'test.js')
       await writeFile(testFile, 'console.log("hello")\nconsole.log("world")')
       
-      // Stage the hunk using npx
-      const result = await execa('npx', ['git-tweezers', 'hunk', 'test.js:1'], { cwd: worktreeDir })
+      // Stage the hunk directly
+      const binPath = join(process.cwd(), 'bin', 'run.js')
+      const result = await execa('node', [binPath, 'hunk', 'test.js:1'], { cwd: worktreeDir })
       
       expect(result.exitCode).toBe(0)
       expect(result.stderr).toContain('Staged hunk')
@@ -122,10 +128,11 @@ describe('Worktree Support', () => {
       // Make a change and stage it
       const testFile = join(worktreeDir, 'test.js')
       await writeFile(testFile, 'console.log("hello")\nconsole.log("world")')
-      await execa('npx', ['git-tweezers', 'hunk', 'test.js:1'], { cwd: worktreeDir })
+      const binPath = join(process.cwd(), 'bin', 'run.js')
+      await execa('node', [binPath, 'hunk', 'test.js:1'], { cwd: worktreeDir })
       
-      // Undo the staging using npx
-      const undoResult = await execa('npx', ['git-tweezers', 'undo'], { cwd: worktreeDir })
+      // Undo the staging directly
+      const undoResult = await execa('node', [binPath, 'undo'], { cwd: worktreeDir })
       expect(undoResult.exitCode).toBe(0)
       
       // Verify it was undone

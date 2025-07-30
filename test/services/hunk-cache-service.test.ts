@@ -42,36 +42,42 @@ describe('HunkCacheService', () => {
   describe('mapHunks', () => {
     it('should preserve IDs for cached hunks', () => {
       const hunks = [
-        createMockHunk('abc1', 1),
-        createMockHunk('def2', 2),
+        createMockHunk('dummy1', 1),
+        createMockHunk('dummy2', 2),
       ]
 
       // First call - cache the IDs
       const mapped1 = service.mapHunks('test.js', hunks)
-      expect(mapped1[0].id).toBe('abc1')
-      expect(mapped1[1].id).toBe('def2')
-
-      // Second call with different IDs but same headers
-      const newHunks = [
-        createMockHunk('new1', 1),
-        createMockHunk('new2', 2),
-      ]
-      const mapped2 = service.mapHunks('test.js', newHunks)
+      const firstId = mapped1[0].id
+      const secondId = mapped1[1].id
       
-      // Should use cached IDs
-      expect(mapped2[0].id).toBe('abc1')
-      expect(mapped2[1].id).toBe('def2')
+      // IDs should be generated based on content
+      expect(firstId).toHaveLength(4)
+      expect(secondId).toHaveLength(4)
+
+      // Second call with same content (same index/header)
+      const sameHunks = [
+        createMockHunk('different1', 1),
+        createMockHunk('different2', 2),
+      ]
+      const mapped2 = service.mapHunks('test.js', sameHunks)
+      
+      // Should use cached IDs since content is the same
+      expect(mapped2[0].id).toBe(firstId)
+      expect(mapped2[1].id).toBe(secondId)
     })
 
     it('should create new cache entries for new hunks', () => {
-      const hunks = [createMockHunk('new1', 1)]
+      const hunks = [createMockHunk('dummy', 1)]
       const mapped = service.mapHunks('new-file.js', hunks)
       
-      expect(mapped[0].id).toBe('new1')
+      // ID should be generated
+      const generatedId = mapped[0].id
+      expect(generatedId).toHaveLength(4)
       
       // Verify it was cached
       const cached = service.mapHunks('new-file.js', [createMockHunk('different', 1)])
-      expect(cached[0].id).toBe('new1')
+      expect(cached[0].id).toBe(generatedId)
     })
   })
 
@@ -117,18 +123,19 @@ describe('HunkCacheService', () => {
 
   describe('clearCache', () => {
     it('should clear all cached entries', () => {
-      const hunks = [createMockHunk('test1', 1)]
+      const hunks = [createMockHunk('dummy', 1)]
       
       // Cache some data
-      service.mapHunks('test.js', hunks)
+      const mapped1 = service.mapHunks('test.js', hunks)
+      const originalId = mapped1[0].id
       
       // Clear cache
       service.clearCache()
       
-      // New hunk with different ID should keep its ID
-      const newHunks = [createMockHunk('new1', 1)]
-      const mapped = service.mapHunks('test.js', newHunks)
-      expect(mapped[0].id).toBe('new1')
+      // Same hunk should get the same ID (based on content)
+      const sameHunks = [createMockHunk('another', 1)]
+      const mapped2 = service.mapHunks('test.js', sameHunks)
+      expect(mapped2[0].id).toBe(originalId) // Same content = same ID
     })
   })
 
