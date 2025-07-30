@@ -11,6 +11,9 @@ Advanced non-interactive git staging tool with hunk and line-level control.
 - 🌈 **Colorful output**: Clear visual feedback with colored output
 - 📄 **Untracked file support**: Stage parts of new files
 - 🔧 **Cross-platform**: Works on Windows, macOS, and Linux
+- 🆔 **Stable Hunk IDs**: Consistent hunk identification across multiple commands
+- 👀 **Diff Preview**: View actual changes before staging
+- 📁 **Multi-file Support**: Stage hunks from multiple files in one command
 
 ## Installation
 
@@ -45,6 +48,14 @@ npx git-tweezers install --force
 
 Once installed, you can use `/smart-commit` in Claude Code to create logical commits with precise staging.
 
+### What's New
+
+- **Stable Hunk IDs**: Each hunk now has a unique 4-character ID (e.g., `a3f5`) that remains consistent across commands
+- **Enhanced List Output**: See hunk stats and summary at a glance: `[1|a3f5] @@ -10,5 +10,7 @@ +2 -1 | return a + b;`
+- **Preview Mode**: Use `--preview` to see full diff content before staging
+- **Multi-file Support**: Stage hunks from multiple files in one command: `tweeze hunk file1.ts:1 file2.ts:3`
+- **Better Error Messages**: When staging fails, see all remaining hunks with their IDs and summaries
+
 ### Basic Workflow
 
 ```bash
@@ -54,16 +65,8 @@ tweeze list src/index.ts
 npx git-tweezers list src/index.ts
 
 # Output example:
-# Hunk 1 @ lines 10-20:
-#   function calculate() {
-# -   return a + b;
-# +   return a + b + c;
-#   }
-# 
-# Hunk 2 @ lines 45-50:
-# + function validate(input) {
-# +   return input > 0;
-# + }
+# [1|a3f5] @@ -10,5 +10,7 @@ +2 -1 | return a + b;
+# [2|b8d2] @@ -45,3 +47,6 @@ +3 | function validate(input) {
 
 # 2. Stage only the bug fix (hunk 1)
 tweeze hunk src/index.ts 1
@@ -92,25 +95,45 @@ npx git-tweezers lines src/components/Button.tsx 10-20
 npx git-tweezers list -p src/components/Button.tsx
 ```
 
-### List hunks in a file
+### List hunks in files
 
 ```bash
-# List hunks with normal context (U3)
+# List hunks in all changed files
+tweeze list
+
+# List hunks in a specific file
 tweeze list src/index.ts
 
 # List hunks with precise context (U0) for more granular control
 tweeze list -p src/index.ts
+
+# Show preview of actual changes
+tweeze list --preview src/index.ts
+
+# Show inline summary only (default)
+tweeze list --inline src/index.ts
 ```
 
 ### Stage specific hunks
 
 ```bash
-# Stage a single hunk (1-based index)
+# Stage by index (1-based)
 tweeze hunk src/index.ts 2
 
-# Stage multiple hunks
-tweeze hunk src/index.ts 1
-tweeze hunk src/index.ts 3
+# Stage by ID
+tweeze hunk src/index.ts a3f5
+
+# Stage using colon syntax
+tweeze hunk src/index.ts:2
+tweeze hunk src/index.ts:a3f5
+
+# Stage multiple hunks from same file
+tweeze hunk src/index.ts 1,3,5
+tweeze hunk src/index.ts:1,3,5
+
+# Stage hunks from multiple files
+tweeze hunk src/file1.ts:1 src/file2.ts:3
+tweeze hunk src/file1.ts:a3f5 src/file2.ts:b8d2
 
 # Use precise mode for finer control
 tweeze hunk -p src/index.ts 2
@@ -139,25 +162,31 @@ $ git diff --stat
  
 # See what changed
 $ tweeze list src/components/Button.tsx
-Hunk 1 @ lines 5-10:
-  import React from 'react';
-+ import { useState } from 'react';
+[1|a3f5] @@ -5,3 +5,4 @@ +1 | import { useState } from 'react';
+[2|b8d2] @@ -15,10 +16,11 @@ +3 -2 | const [clicked, setClicked] = useState(false);
+[3|c1e9] @@ -30,1 +32,5 @@ +4 -1 | // TODO: Add prop types
 
-Hunk 2 @ lines 15-25:
-  export function Button({ onClick, children }) {
-+   const [clicked, setClicked] = useState(false);
-    return (
--     <button onClick={onClick}>
-+     <button onClick={() => { setClicked(true); onClick(); }}>
-        {children}
-      </button>
+# Or see with preview
+$ tweeze list --preview src/components/Button.tsx
+[1|a3f5] @@ -5,3 +5,4 @@
+   import React from 'react';
++  import { useState } from 'react';
 
-Hunk 3 @ lines 30-35:
-- // TODO: Add prop types
-+ Button.propTypes = {
-+   onClick: PropTypes.func.isRequired,
-+   children: PropTypes.node
-+ };
+[2|b8d2] @@ -15,10 +16,11 @@
+   export function Button({ onClick, children }) {
++    const [clicked, setClicked] = useState(false);
+     return (
+-      <button onClick={onClick}>
++      <button onClick={() => { setClicked(true); onClick(); }}>
+         {children}
+       </button>
+
+[3|c1e9] @@ -30,1 +32,5 @@
+-  // TODO: Add prop types
++  Button.propTypes = {
++    onClick: PropTypes.func.isRequired,
++    children: PropTypes.node
++  };
 
 # Stage only the import and state changes (hunks 1 & 2)
 $ tweeze hunk src/components/Button.tsx 1
