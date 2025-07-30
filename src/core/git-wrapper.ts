@@ -28,6 +28,15 @@ export class GitWrapper {
     return this.execute(['diff', `-U${context}`, '--', file])
   }
 
+  async diffAll(context = 3): Promise<string> {
+    return this.execute(['diff', `-U${context}`])
+  }
+
+  async getChangedFiles(): Promise<string[]> {
+    const output = await this.execute(['diff', '--name-only'])
+    return output.split('\n').filter(line => line.trim())
+  }
+
   async diffCached(file?: string, context = 3): Promise<string> {
     const args = ['diff', '--cached', `-U${context}`]
     if (file) args.push('--', file)

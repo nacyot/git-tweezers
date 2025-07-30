@@ -43,22 +43,21 @@ export class StagingService {
       return []
     }
     
-    const files = this.parser.parseFiles(diff)
+    const files = this.parser.parseFilesWithInfo(diff)
     const file = files.find(f => f.newPath === filePath || f.oldPath === filePath)
     
     if (!file) {
       return []
     }
     
-    return file.hunks.map((hunk, index) => 
-      `Hunk ${index + 1}: ${hunk.header}`
-    )
+    // Map hunks with cache to maintain stable IDs
+    return this.cache.mapHunks(filePath, file.hunks)
   }
 
   /**
-   * Stage a specific hunk by index (1-based)
+   * Stage a specific hunk by index (1-based) or ID
    */
-  async stageHunk(filePath: string, hunkIndex: number, options?: StageOptions): Promise<void> {
+  async stageHunk(filePath: string, hunkSelector: number | string, options?: StageOptions): Promise<void> {
     // Check if file is binary
     const isBinary = await this.git.isBinary(filePath)
     if (isBinary) {
@@ -78,18 +77,31 @@ export class StagingService {
       throw new Error(`No changes found for file: ${filePath}`)
     }
     
-    const files = this.parser.parseFiles(diff)
+    const files = this.parser.parseFilesWithInfo(diff)
     const file = files.find(f => f.newPath === filePath || f.oldPath === filePath)
     
     if (!file) {
       throw new Error(`File not found in diff: ${filePath}`)
     }
     
-    if (hunkIndex < 1 || hunkIndex > file.hunks.length) {
-      throw new Error(`Hunk index ${hunkIndex} out of range. File has ${file.hunks.length} hunks.`)
+    // Map hunks with cache
+    const hunks = this.cache.mapHunks(filePath, file.hunks)
+    
+    if (process.env.DEBUG === '1') {
+      console.log(`Looking for hunk selector: "${hunkSelector}"`)
+      console.log(`Available hunks:`, hunks.map(h => ({ index: h.index, id: h.id })))
     }
     
-    const hunk = file.hunks[hunkIndex - 1]
+    // Find the hunk by selector
+    const hunk = this.cache.findHunk(hunks, hunkSelector)
+    
+    if (!hunk) {
+      throw new StagingError(
+        `Hunk '${hunkSelector}' not found. File has ${hunks.length} hunks.`,
+        hunks
+      )
+    }
+    
     const fileData = {
       oldPath: file.oldPath,
       newPath: file.newPath,
