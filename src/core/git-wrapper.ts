@@ -142,13 +142,27 @@ export class GitWrapper {
         cwd: this.cwd,
       })
       const gitDir = result.stdout.trim()
+      
+      // Debug logging
+      if (process.env.DEBUG) {
+        console.error(`[GitWrapper.getGitDir] cwd: ${this.cwd}`)
+        console.error(`[GitWrapper.getGitDir] gitDir from git: ${gitDir}`)
+      }
+      
       // If relative path, make it absolute
       if (!gitDir.startsWith('/') && !gitDir.startsWith('\\') && !gitDir.match(/^[A-Z]:/)) {
-        return join(this.cwd || process.cwd(), gitDir)
+        const absolutePath = join(this.cwd || process.cwd(), gitDir)
+        if (process.env.DEBUG) {
+          console.error(`[GitWrapper.getGitDir] made absolute: ${absolutePath}`)
+        }
+        return absolutePath
       }
       return gitDir
-    } catch {
+    } catch (error) {
       // Fall back to .git in current directory if git command fails
+      if (process.env.DEBUG) {
+        console.error(`[GitWrapper.getGitDir] git command failed:`, error)
+      }
       return join(this.cwd || process.cwd(), '.git')
     }
   }

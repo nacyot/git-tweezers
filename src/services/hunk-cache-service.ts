@@ -38,6 +38,14 @@ export class HunkCacheService {
     this.git = new GitWrapper(cwd)
     const gitDir = this.git.getGitDir()
     this.cachePath = join(gitDir, 'tweezers-cache.json')
+    
+    // Debug logging for worktree issues
+    if (process.env.DEBUG) {
+      console.error(`[HunkCacheService] cwd: ${cwd}`)
+      console.error(`[HunkCacheService] gitDir: ${gitDir}`)
+      console.error(`[HunkCacheService] cachePath: ${this.cachePath}`)
+    }
+    
     this.cacheData = this.loadCache()
   }
   
