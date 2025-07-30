@@ -35,4 +35,7 @@ tmp/
 oclif.manifest.json
 
 # Notes
-.notes/.env.local
+.notes/
+
+# Environment
+.env.local
