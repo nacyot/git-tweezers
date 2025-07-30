@@ -1,4 +1,4 @@
-import { execa, type Options as ExecaOptions } from 'execa'
+import { execa, execaSync, type Options as ExecaOptions } from 'execa'
 
 export interface GitOptions extends ExecaOptions {
   cwd?: string
@@ -106,6 +106,18 @@ export class GitWrapper {
     } catch {
       // If commands fail, assume it's not binary
       return false
+    }
+  }
+
+  getGitRoot(): string {
+    try {
+      const result = execaSync('git', ['rev-parse', '--show-toplevel'], {
+        cwd: this.cwd,
+      })
+      return result.stdout.trim()
+    } catch {
+      // Fall back to current directory if git command fails
+      return this.cwd || process.cwd()
     }
   }
 }
