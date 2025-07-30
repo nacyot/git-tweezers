@@ -3,6 +3,9 @@ import { DiffParser, type ParsedHunk } from '../core/diff-parser.js'
 import { PatchBuilder } from '../core/patch-builder.js'
 import { LineMapper } from '../core/line-mapper.js'
 import type { ExtendedLineChange } from '../types/extended-diff.js'
+import type { HunkInfo } from '../types/hunk-info.js'
+import { HunkCacheService } from './hunk-cache-service.js'
+import { StagingError } from '../utils/staging-error.js'
 
 export interface StageOptions {
   precise?: boolean // Use U0 context for finer control
@@ -13,17 +16,29 @@ export class StagingService {
   private git: GitWrapper
   private parser: DiffParser
   private builder: PatchBuilder
+  private cache: HunkCacheService
 
   constructor(cwd?: string) {
     this.git = new GitWrapper(cwd)
     this.parser = new DiffParser()
     this.builder = new PatchBuilder()
+    this.cache = new HunkCacheService(cwd)
   }
 
   /**
    * List all hunks in a file
    */
   async listHunks(filePath: string, options?: StageOptions): Promise<string[]> {
+    const hunks = await this.listHunksWithInfo(filePath, options)
+    return hunks.map((hunk) => 
+      `Hunk ${hunk.index}: ${hunk.header}`
+    )
+  }
+
+  /**
+   * List all hunks with full information
+   */
+  async listHunksWithInfo(filePath: string, options?: StageOptions): Promise<HunkInfo[]> {
     // Check if file is binary
     const isBinary = await this.git.isBinary(filePath)
     if (isBinary) {
