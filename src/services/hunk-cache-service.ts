@@ -2,12 +2,12 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { GitWrapper } from '../core/git-wrapper.js'
 import type { HunkInfo } from '../types/hunk-info.js'
+import { generateContentFingerprint } from '../core/hunk-id.js'
+import type { ParsedHunk } from '../core/diff-parser.js'
 
-interface CacheEntry {
+interface FingerprintEntry {
   id: string
-  filePath: string
-  header: string
-  summary?: string
+  fingerprint: string
   lastSeen: number
 }
 
@@ -22,7 +22,10 @@ interface HistoryEntry {
 
 interface CacheData {
   version: number
-  entries: Record<string, CacheEntry>
+  // Map from fingerprint to ID
+  fingerprints: Record<string, string>
+  // Track ID usage for collision detection
+  usedIds: Record<string, FingerprintEntry>
   history?: HistoryEntry[]
 }
 
@@ -40,19 +43,30 @@ export class HunkCacheService {
   
   private loadCache(): CacheData {
     if (!existsSync(this.cachePath)) {
-      return { version: 1, entries: {}, history: [] }
+      return { version: 2, fingerprints: {}, usedIds: {}, history: [] }
     }
     
     try {
       const content = readFileSync(this.cachePath, 'utf8')
       const data = JSON.parse(content)
+      
+      // Migrate from version 1 to version 2
+      if (data.version === 1) {
+        return { version: 2, fingerprints: {}, usedIds: {}, history: data.history || [] }
+      }
+      
       // Ensure history array exists
       if (!data.history) {
         data.history = []
       }
+      
+      // Ensure required fields exist
+      if (!data.fingerprints) data.fingerprints = {}
+      if (!data.usedIds) data.usedIds = {}
+      
       return data
     } catch {
-      return { version: 1, entries: {}, history: [] }
+      return { version: 2, fingerprints: {}, usedIds: {}, history: [] }
     }
   }
   
@@ -64,9 +78,12 @@ export class HunkCacheService {
     
     // Clean up old entries (older than 7 days)
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-    Object.keys(this.cacheData.entries).forEach(key => {
-      if (this.cacheData.entries[key].lastSeen < weekAgo) {
-        delete this.cacheData.entries[key]
+    Object.keys(this.cacheData.usedIds).forEach(id => {
+      const entry = this.cacheData.usedIds[id]
+      if (entry.lastSeen < weekAgo) {
+        // Remove from both maps
+        delete this.cacheData.usedIds[id]
+        delete this.cacheData.fingerprints[entry.fingerprint]
       }
     })
     
@@ -74,32 +91,56 @@ export class HunkCacheService {
   }
   
   /**
-   * Get or create ID mapping for hunks
+   * Get or create stable ID mapping for hunks
    */
   mapHunks(filePath: string, hunks: HunkInfo[]): HunkInfo[] {
     const now = Date.now()
+    const existingIds = new Set(Object.keys(this.cacheData.usedIds))
+    
     const updatedHunks = hunks.map(hunk => {
-      const cacheKey = `${filePath}:${hunk.header}`
-      
-      // Check if we have a cached ID for this hunk
-      const cached = this.cacheData.entries[cacheKey]
-      if (cached) {
-        // Update last seen time
-        cached.lastSeen = now
-        // Use cached ID if available
-        return { ...hunk, id: cached.id }
+      // Generate content-based fingerprint
+      const parsedHunk: ParsedHunk = {
+        index: hunk.index,
+        header: hunk.header,
+        oldStart: hunk.oldStart,
+        oldLines: hunk.oldLines,
+        newStart: hunk.newStart,
+        newLines: hunk.newLines,
+        changes: hunk.changes,
       }
       
-      // Store new ID in cache
-      this.cacheData.entries[cacheKey] = {
-        id: hunk.id,
-        filePath,
-        header: hunk.header,
-        summary: hunk.summary,
+      const fingerprint = generateContentFingerprint(parsedHunk, filePath)
+      
+      // Check if we already have an ID for this fingerprint
+      if (this.cacheData.fingerprints[fingerprint]) {
+        const cachedId = this.cacheData.fingerprints[fingerprint]
+        // Update last seen time
+        if (this.cacheData.usedIds[cachedId]) {
+          this.cacheData.usedIds[cachedId].lastSeen = now
+        }
+        return { ...hunk, id: cachedId }
+      }
+      
+      // Generate new ID
+      let length = 4
+      let id = fingerprint.substring(0, length)
+      
+      // Handle collisions by increasing length
+      while (existingIds.has(id) && length < fingerprint.length) {
+        length++
+        id = fingerprint.substring(0, length)
+      }
+      
+      // Store the mapping
+      this.cacheData.fingerprints[fingerprint] = id
+      this.cacheData.usedIds[id] = {
+        id,
+        fingerprint,
         lastSeen: now,
       }
+      existingIds.add(id)
       
-      return hunk
+      return { ...hunk, id }
     })
     
     this.saveCache()
@@ -118,22 +159,28 @@ export class HunkCacheService {
     // selector is a string
     const selectorStr = String(selector).trim()
     
-    // Try to parse as number first
+    // First try to find by ID
+    const byId = hunks.find(h => h.id === selectorStr)
+    if (byId) {
+      return byId
+    }
+    
+    // If not found by ID, try to parse as number for index lookup
     const num = parseInt(selectorStr, 10)
     if (!isNaN(num) && String(num) === selectorStr) {
       // It's a pure number, find by index
       return hunks.find(h => h.index === num)
     }
     
-    // Find by ID
-    return hunks.find(h => h.id === selectorStr)
+    // Not found
+    return undefined
   }
   
   /**
    * Clear the cache
    */
   clearCache(): void {
-    this.cacheData = { version: 1, entries: {}, history: [] }
+    this.cacheData = { version: 2, fingerprints: {}, usedIds: {}, history: [] }
     this.saveCache()
   }
   
