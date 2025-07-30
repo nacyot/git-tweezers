@@ -1,6 +1,9 @@
 [tools]
 node = "20.18.2"
 
+[env]
+_.file = [".env", ".env.local"]
+
 [tasks.release]
 run = "./mise/release.sh"
 description = "Release a new version (usage: mise run release [major|minor|patch])"
