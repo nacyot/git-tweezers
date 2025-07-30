@@ -4,7 +4,9 @@ import parse, {
   type Chunk
 } from 'parse-git-diff'
 import type { ExtendedLineChange } from '../types/extended-diff.js'
+import type { FileInfo } from '../types/hunk-info.js'
 import { DiffAnalyzer } from './diff-analyzer.js'
+import { generateHunkId, getHunkSummary, getHunkStats } from './hunk-id.js'
 
 export interface ParsedHunk {
   index: number
@@ -28,6 +30,24 @@ export class DiffParser {
   }
 
   parseFiles(diffText: string): ParsedFile[] {
+    const files = this.parseFilesWithInfo(diffText)
+    // Convert back to ParsedFile for backward compatibility
+    return files.map(file => ({
+      oldPath: file.oldPath,
+      newPath: file.newPath,
+      hunks: file.hunks.map(hunk => ({
+        index: hunk.index,
+        header: hunk.header,
+        oldStart: hunk.oldStart,
+        oldLines: hunk.oldLines,
+        newStart: hunk.newStart,
+        newLines: hunk.newLines,
+        changes: hunk.changes,
+      }))
+    }))
+  }
+
+  parseFilesWithInfo(diffText: string): FileInfo[] {
     const gitDiff = this.parse(diffText)
     const eolMap = DiffAnalyzer.analyzeEOL(diffText)
     
@@ -59,7 +79,7 @@ export class DiffParser {
                 } as ExtendedLineChange
               })
             
-            return {
+            const hunkData = {
               index: index + 1, // 1-based index for user-facing
               header,
               oldStart: chunk.fromFileRange.start,
@@ -67,6 +87,17 @@ export class DiffParser {
               newStart: chunk.toFileRange.start,
               newLines: chunk.toFileRange.lines,
               changes: enhancedChanges,
+            }
+            
+            const id = generateHunkId(hunkData, newPath)
+            const summary = getHunkSummary(hunkData)
+            const stats = getHunkStats(hunkData)
+            
+            return {
+              ...hunkData,
+              id,
+              summary,
+              stats,
             }
           }),
       }
