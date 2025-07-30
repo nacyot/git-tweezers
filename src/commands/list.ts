@@ -2,13 +2,18 @@ import { Command, Flags, Args } from '@oclif/core'
 import chalk from 'chalk'
 import { StagingService } from '../services/staging-service.js'
 import { logger, LogLevel } from '../utils/logger.js'
+import { DiffRenderer } from '../utils/diff-renderer.js'
+import { GitWrapper } from '../core/git-wrapper.js'
 
 export default class List extends Command {
   static description = 'List all hunks in a file with their line numbers'
 
   static examples = [
-    '<%= config.bin %> <%= command.id %> src/index.ts',
+    '<%= config.bin %> <%= command.id %>  # List all changed files',
+    '<%= config.bin %> <%= command.id %> src/index.ts  # List hunks in specific file',
+    '<%= config.bin %> <%= command.id %> src/*.ts  # List hunks in multiple files',
     '<%= config.bin %> <%= command.id %> -p src/index.ts  # Use precise mode for smaller hunks',
+    '<%= config.bin %> <%= command.id %> --preview  # Show diff preview for each hunk',
   ]
 
   static flags = {
@@ -17,20 +22,35 @@ export default class List extends Command {
       description: 'Use precise mode (U0 context) for finer control',
       default: false,
     }),
-  }
-
-  static args = {
-    file: Args.string({
-      description: 'File to list hunks from',
-      required: true,
+    preview: Flags.boolean({
+      description: 'Show full diff preview for each hunk',
+      default: false,
+    }),
+    inline: Flags.boolean({
+      char: 'i',
+      description: 'Show inline summary with stats and first changed line',
+      default: false,
+    }),
+    context: Flags.integer({
+      char: 'c',
+      description: 'Number of context lines to show (with --preview)',
+      default: 3,
     }),
   }
 
+  static args = {
+    files: Args.string({
+      description: 'Files to list hunks from (omit to show all)',
+      required: false,
+    }),
+  }
+
+  static strict = false // Allow multiple files
+
   async run(): Promise<void> {
-    const { args, flags } = await this.parse(List)
+    const { argv, flags } = await this.parse(List)
     
-    // Check for PRECISE environment variable
-    const precise = flags.precise || process.env.PRECISE === '1'
+    const precise = flags.precise
     
     if (process.env.DEBUG === '1') {
       logger.setLevel(LogLevel.DEBUG)
@@ -38,25 +58,82 @@ export default class List extends Command {
     
     try {
       const staging = new StagingService()
-      const hunks = await staging.listHunks(args.file, { precise })
+      const renderer = new DiffRenderer()
+      const git = new GitWrapper()
       
-      if (hunks.length === 0) {
-        this.log(chalk.yellow(`No changes in ${args.file}`))
+      // Get files to process
+      let files: string[]
+      if (argv.length === 0) {
+        // No files specified, get all changed files
+        files = await git.getChangedFiles()
+        if (files.length === 0) {
+          this.log(chalk.yellow('No changes found in repository'))
+          return
+        }
+      } else {
+        // Use specified files
+        files = argv as string[]
+      }
+      
+      const showPreview = flags.preview
+      const showInline = flags.inline || (!flags.preview && !flags.inline) // Default to inline if no option
+      let hasChanges = false
+      
+      for (const file of files) {
+        try {
+          const hunks = await staging.listHunksWithInfo(file, { precise })
+          
+          if (hunks.length === 0) {
+            continue
+          }
+          
+          hasChanges = true
+          
+          // Show file header
+          this.log(chalk.bold.blue(`\n${file}:`))
+          
+          hunks.forEach((hunk) => {
+            // Format: [index|id] header (stats) | summary
+            let line = chalk.green(`  [${hunk.index}|${hunk.id}] ${hunk.header}`)
+            
+            if (showInline) {
+              const summary = renderer.renderHunkSummary(hunk)
+              if (summary) {
+                line += ' ' + summary
+              }
+            }
+            
+            this.log(line)
+            
+            if (showPreview) {
+              const preview = renderer.renderHunk(hunk, { context: flags.context })
+              if (preview) {
+                const indentedPreview = preview.split('\n').map(l => '    ' + l).join('\n')
+                this.log(indentedPreview)
+                this.log('') // Empty line between hunks
+              }
+            }
+          })
+        } catch (error) {
+          // Skip files that can't be processed (e.g., binary files)
+          if (process.env.DEBUG === '1') {
+            logger.debug(`Skipping ${file}: ${error}`)
+          }
+        }
+      }
+      
+      if (!hasChanges) {
+        this.log(chalk.yellow('No changes found in specified files'))
         return
       }
       
-      this.log(chalk.bold(`Hunks in ${args.file} (${precise ? 'U0' : 'U3'} mode):`))
       this.log('')
-      
-      hunks.forEach((hunk) => {
-        this.log(chalk.green(`${hunk}`))
-      })
-      
-      this.log('')
-      this.log(`Use: ${chalk.cyan(`${this.config.bin} hunk ${args.file} <number>`)} to stage a specific hunk`)
+      this.log(chalk.dim('─'.repeat(60)))
+      this.log(`Use: ${chalk.cyan(`${this.config.bin} hunk <file>:<number|id>`)} to stage a specific hunk`)
+      this.log(`     ${chalk.cyan(`${this.config.bin} hunk <file> <number|id>`)} (original syntax)`)
       
       if (!precise) {
-        this.log(`Tip: Use ${chalk.yellow('PRECISE=1')} for more granular hunks`)
+        this.log(`\nTip: Use ${chalk.yellow('-p')} or ${chalk.yellow('--precise')} for more granular hunks`)
       }
       
     } catch (error) {
