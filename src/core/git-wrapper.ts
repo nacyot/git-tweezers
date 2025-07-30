@@ -56,6 +56,11 @@ export class GitWrapper {
     await this.executeWithInput(args, patch)
   }
 
+  async reverseApplyCached(patch: string, options: string[] = []): Promise<void> {
+    const args = ['apply', '-R', '--cached', ...options, '-']
+    await this.executeWithInput(args, patch)
+  }
+
   async status(short = false): Promise<string> {
     const args = ['status']
     if (short) args.push('--short')

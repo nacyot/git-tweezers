@@ -143,6 +143,13 @@ export class StagingService {
     // Apply the patch
     const applyOptions = options?.precise ? ['--cached', '--unidiff-zero'] : ['--cached']
     await this.git.applyWithOptions(patch, applyOptions)
+    // Record in history
+    this.cache.addHistory({
+      patch,
+      files: [filePath],
+      selectors: [hunkSelector],
+      description: `Stage hunk ${hunkSelector} from ${filePath}`,
+    })
   }
 
   /**
@@ -249,6 +256,13 @@ export class StagingService {
     }
     // Apply with recount option for better reliability
     await this.git.applyWithOptions(patch, ['--cached', '--recount'])
+    // Record in history
+    this.cache.addHistory({
+      patch,
+      files: [filePath],
+      selectors: [`${startLine}-${endLine}`],
+      description: `Stage lines ${startLine}-${endLine} from ${filePath}`,
+    })
   }
 
   /**
@@ -318,6 +332,13 @@ export class StagingService {
     // Apply the patch
     const applyOptions = options?.precise ? ['--cached', '--unidiff-zero'] : ['--cached']
     await this.git.applyWithOptions(patch, applyOptions)
+    // Record in history
+    this.cache.addHistory({
+      patch,
+      files: [filePath],
+      selectors: hunkSelectors,
+      description: `Stage hunks ${hunkSelectors.join(', ')} from ${filePath}`,
+    })
   }
 
   /**

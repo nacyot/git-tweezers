@@ -11,9 +11,19 @@ interface CacheEntry {
   lastSeen: number
 }
 
+interface HistoryEntry {
+  id: string
+  timestamp: number
+  patch: string
+  files: string[]
+  selectors: Array<string | number>
+  description?: string
+}
+
 interface CacheData {
   version: number
   entries: Record<string, CacheEntry>
+  history?: HistoryEntry[]
 }
 
 export class HunkCacheService {
@@ -30,14 +40,19 @@ export class HunkCacheService {
   
   private loadCache(): CacheData {
     if (!existsSync(this.cachePath)) {
-      return { version: 1, entries: {} }
+      return { version: 1, entries: {}, history: [] }
     }
     
     try {
       const content = readFileSync(this.cachePath, 'utf8')
-      return JSON.parse(content)
+      const data = JSON.parse(content)
+      // Ensure history array exists
+      if (!data.history) {
+        data.history = []
+      }
+      return data
     } catch {
-      return { version: 1, entries: {} }
+      return { version: 1, entries: {}, history: [] }
     }
   }
   
@@ -118,7 +133,58 @@ export class HunkCacheService {
    * Clear the cache
    */
   clearCache(): void {
-    this.cacheData = { version: 1, entries: {} }
+    this.cacheData = { version: 1, entries: {}, history: [] }
     this.saveCache()
+  }
+  
+  /**
+   * Add a staging history entry
+   */
+  addHistory(entry: Omit<HistoryEntry, 'id' | 'timestamp'>): void {
+    const historyEntry: HistoryEntry = {
+      id: new Date().toISOString(),
+      timestamp: Date.now(),
+      ...entry,
+    }
+    
+    if (!this.cacheData.history) {
+      this.cacheData.history = []
+    }
+    
+    // Add to beginning of array (newest first)
+    this.cacheData.history.unshift(historyEntry)
+    
+    // Keep only last 20 entries
+    if (this.cacheData.history.length > 20) {
+      this.cacheData.history = this.cacheData.history.slice(0, 20)
+    }
+    
+    this.saveCache()
+  }
+  
+  /**
+   * Get history entries
+   */
+  getHistory(): HistoryEntry[] {
+    return this.cacheData.history || []
+  }
+  
+  /**
+   * Get specific history entry by index (0 = most recent)
+   */
+  getHistoryEntry(index: number): HistoryEntry | undefined {
+    const history = this.getHistory()
+    return history[index]
+  }
+  
+  /**
+   * Remove a history entry
+   */
+  removeHistoryEntry(index: number): void {
+    const history = this.getHistory()
+    if (index >= 0 && index < history.length) {
+      history.splice(index, 1)
+      this.saveCache()
+    }
   }
 }
