@@ -25,38 +25,49 @@ npx git-tweezers list <filename>
 
 # Output format: [index|ID] header stats | summary
 # Example: [1|a3f5] @@ -10,5 +10,7 @@ +2 -1 | return a + b;
+#          ↑   ↑
+#       index  stable hash ID (use this for staging!)
 
 # For finer hunk separation (precise mode)
 npx git-tweezers list -p <filename>
+# Note: When using -p with list, also use -p with hunk command!
 
 # Preview full diff content
 npx git-tweezers list --preview <filename>
 ```
 
 ### 2. Hunk-level Staging
-```bash
-# Stage by index or stable ID
-npx git-tweezers hunk <filename> <hunk-number|ID>
 
-# Using colon syntax
-npx git-tweezers hunk <filename>:<hunk-number|ID>
+**💡 Best Practices**
+- **Use hash IDs over index numbers** - IDs are more explicit and prevent mistakes
+- Always use consistent modes between `list` and `hunk` commands (both with or without `-p`)
+- Hash IDs (e.g., `a3f5`) are stable and unique to each hunk's content
+
+```bash
+# ❌ AVOID: Index-based staging (less explicit)
+npx git-tweezers hunk config.js:1,2  # Numbers can be confusing
+
+# ✅ PREFER: Hash ID-based staging (explicit and clear)
+npx git-tweezers hunk config.js:a3f5,b8d2  # IDs clearly identify specific hunks
+
+# Mode consistency examples:
+# Normal mode (default)
+npx git-tweezers list config.js         # Shows [1|a3f5], [2|b8d2]
+npx git-tweezers hunk config.js:a3f5    # Use same mode
+
+# Precise mode (-p flag)
+npx git-tweezers list -p config.js      # Shows [1|c5b3], [2|7184]
+npx git-tweezers hunk -p config.js:c5b3 # Must also use -p flag!
 
 # Stage multiple hunks from same file
-npx git-tweezers hunk <filename> 1,3,5
-npx git-tweezers hunk <filename>:1,3,5
+npx git-tweezers hunk <filename>:a3f5,b8d2  # Use IDs, not indices
 
 # Stage hunks from multiple files
-npx git-tweezers hunk file1.ts:1 file2.ts:3
 npx git-tweezers hunk file1.ts:a3f5 file2.ts:b8d2
 
 # Preview without staging (dry-run)
-npx git-tweezers hunk <filename>:1 --dry-run
-npx git-tweezers hunk <filename>:1 -d  # Short form
-
-# Examples:
-npx git-tweezers hunk src/index.ts 2      # By index
-npx git-tweezers hunk src/index.ts a3f5   # By ID
-npx git-tweezers hunk src/index.ts:1,3    # Multiple hunks
+npx git-tweezers hunk <filename>:a3f5 --dry-run
+npx git-tweezers hunk <filename>:a3f5 -d  # Short form
 ```
 
 ### 3. Line-level Staging
@@ -89,16 +100,16 @@ npx git-tweezers list src/services/api.ts
 # [2|a7b9] @@ -45,15 +48,30 @@ +18 -3 | add authentication
 # [3|c1d5] @@ -80,5 +95,10 @@ +7 -2 | refactor error handling
 
-# 3. Preview the bug fix before staging
-npx git-tweezers hunk src/services/api.ts:1 --dry-run
+# 3. Preview the bug fix before staging (use ID, not index)
+npx git-tweezers hunk src/services/api.ts:e3f2 --dry-run
 
 # 4. Stage only bug fix (using stable ID)
-npx git-tweezers hunk src/services/api.ts e3f2
+npx git-tweezers hunk src/services/api.ts:e3f2
 
 # 5. Commit
 git commit -m "fix: resolve API response handling error"
 
-# 6. Stage new feature and refactoring together
+# 6. Stage new feature and refactoring together (use IDs for reliability)
 npx git-tweezers hunk src/services/api.ts:a7b9,c1d5
 
 # 7. Commit
@@ -118,11 +129,26 @@ npx git-tweezers undo --step 2
 ```
 
 ### 6. Tips for Complex Changes
+- **Use Hash IDs for clarity**: IDs are more explicit and prevent confusion
+  ```bash
+  # Hash IDs make your intent clear
+  npx git-tweezers list config.js         # Shows [1|a3f5], [2|b8d2]
+  npx git-tweezers hunk config.js:a3f5    # Clearly stages the "a3f5" hunk
+  npx git-tweezers hunk config.js:b8d2    # Clearly stages the "b8d2" hunk
+  
+  # You can also stage multiple hunks at once
+  npx git-tweezers hunk config.js:a3f5,b8d2  # Stage both hunks together
+  ```
+- **Mode consistency**: Always match modes between `list` and `hunk` commands
+  ```bash
+  # If using precise mode for listing, also use it for staging
+  npx git-tweezers list -p file.js        # Note the -p flag
+  npx git-tweezers hunk -p file.js:abc3   # Must also use -p flag
+  ```
 - **Multiple files**: Stage related changes from different files in one command
   ```bash
-  npx git-tweezers hunk src/api.ts:1 src/types.ts:2 src/index.ts:3
+  npx git-tweezers hunk src/api.ts:a3f5 src/types.ts:b8d2 src/index.ts:c1d5
   ```
-- **Stable IDs**: Use 4-character IDs (e.g., `a3f5`) that remain consistent across commands
 - **Large hunks**: Use `-p` (precise mode) or `lines` command to select only needed lines
 - **Preview changes**: Always use `--dry-run` to verify before staging
 - **Error recovery**: When staging fails, the error shows all remaining hunks with their IDs
