@@ -63,9 +63,9 @@ export default class List extends Command {
     }
     
     try {
-      const staging = new StagingService(process.cwd())
-      const renderer = new DiffRenderer()
       const git = new GitWrapper()
+      const staging = new StagingService(git.gitRoot)
+      const renderer = new DiffRenderer()
       
       // Get files to process
       let files: string[]

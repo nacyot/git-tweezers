@@ -3,6 +3,7 @@ import { StagingService } from '../services/staging-service.js'
 import { logger, LogLevel } from '../utils/logger.js'
 import { StagingError } from '../utils/staging-error.js'
 import { parseFileSelector } from '../utils/file-parser.js'
+import { GitWrapper } from '../core/git-wrapper.js'
 
 export default class Hunk extends Command {
   static description = 'Stage specific hunks from a file by their numbers'
@@ -48,7 +49,8 @@ export default class Hunk extends Command {
     }
     
     try {
-      const staging = new StagingService(process.cwd())
+      const git = new GitWrapper()
+      const staging = new StagingService(git.gitRoot)
       
       // Parse arguments to extract file and hunk selectors
       const fileHunks = new Map<string, string[]>()

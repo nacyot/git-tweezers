@@ -6,7 +6,14 @@ export interface GitOptions extends ExecaOptions {
 }
 
 export class GitWrapper {
-  constructor(private readonly cwd?: string) {}
+  private repoRoot: string
+
+  constructor(cwd: string = process.cwd()) {
+    this.repoRoot = this.getGitRootStatic(cwd)
+    this.cwd = this.repoRoot
+  }
+
+  private readonly cwd: string
 
   async execute(args: string[], options?: GitOptions): Promise<string> {
     const result = await execa('git', args, {
@@ -125,15 +132,27 @@ export class GitWrapper {
   }
 
   getGitRoot(): string {
+    return this.repoRoot
+  }
+
+  get gitRoot(): string {
+    return this.repoRoot
+  }
+
+  static getGitRootStatic(cwd: string): string {
     try {
       const result = execaSync('git', ['rev-parse', '--show-toplevel'], {
-        cwd: this.cwd,
+        cwd: cwd,
       })
       return result.stdout.trim()
     } catch {
       // Fall back to current directory if git command fails
-      return this.cwd || process.cwd()
+      return cwd
     }
+  }
+
+  private getGitRootStatic(cwd: string): string {
+    return GitWrapper.getGitRootStatic(cwd)
   }
 
   getGitDir(): string {

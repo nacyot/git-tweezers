@@ -2,6 +2,7 @@ import { Command, Args, Flags } from '@oclif/core'
 import { StagingService } from '../services/staging-service.js'
 import { logger, LogLevel } from '../utils/logger.js'
 import { parseLineRanges, formatRanges } from '../utils/range-parser.js'
+import { GitWrapper } from '../core/git-wrapper.js'
 
 export default class Lines extends Command {
   static description = 'Stage specific lines or line ranges from a file'
@@ -40,7 +41,8 @@ export default class Lines extends Command {
     }
     
     try {
-      const staging = new StagingService(process.cwd())
+      const git = new GitWrapper()
+      const staging = new StagingService(git.gitRoot)
       
       // Parse line ranges
       const ranges = parseLineRanges(args.range)

@@ -34,7 +34,7 @@ export default class Undo extends Command {
     
     try {
       const git = new GitWrapper()
-      const cache = new HunkCacheService(process.cwd())
+      const cache = new HunkCacheService(git.gitRoot)
       
       // Handle list flag
       if (flags.list) {
