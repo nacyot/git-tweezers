@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { execa } from 'execa'
 import { join } from 'path'
 import { rm, mkdir, writeFile, readFile } from 'fs/promises'
-import { existsSync } from 'fs'
+import { existsSync, realpathSync } from 'fs'
 import { tmpdir } from 'os'
 import { GitWrapper } from '../src/core/git-wrapper.js'
 import { HunkCacheService } from '../src/services/hunk-cache-service.js'
@@ -60,7 +60,8 @@ describe('Worktree Support', () => {
       const gitDir = git.getGitDir()
       
       // Should return .git directory
-      expect(gitDir).toBe(join(mainRepoDir, '.git'))
+      // Use realpathSync to normalize both paths for comparison (handles /private/var vs /var on macOS)
+      expect(realpathSync(gitDir)).toBe(realpathSync(join(mainRepoDir, '.git')))
     })
   })
 
