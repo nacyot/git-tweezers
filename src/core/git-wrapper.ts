@@ -41,8 +41,21 @@ export class GitWrapper {
   }
 
   async getChangedFiles(): Promise<string[]> {
-    const output = await this.execute(['diff', '--name-only'])
-    return output.split('\n').filter(line => line.trim())
+    // Get modified/staged files
+    const modifiedOutput = await this.execute(['diff', '--name-only'])
+    const modifiedFiles = modifiedOutput.split('\n').filter(line => line.trim())
+    
+    // Get staged files (in case they're staged but not modified)
+    const cachedOutput = await this.execute(['diff', '--cached', '--name-only'])
+    const cachedFiles = cachedOutput.split('\n').filter(line => line.trim())
+    
+    // Get untracked files
+    const untrackedOutput = await this.execute(['ls-files', '--others', '--exclude-standard'])
+    const untrackedFiles = untrackedOutput.split('\n').filter(line => line.trim())
+    
+    // Combine and deduplicate
+    const allFiles = new Set([...modifiedFiles, ...cachedFiles, ...untrackedFiles])
+    return Array.from(allFiles).sort()
   }
 
   async diffCached(file?: string, context = 3): Promise<string> {
