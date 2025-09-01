@@ -1,4 +1,5 @@
 import { Command, Flags, Args } from '@oclif/core'
+import chalk from 'chalk'
 import { StagingService } from '../services/staging-service.js'
 import { logger, LogLevel } from '../utils/logger.js'
 import { StagingError } from '../utils/staging-error.js'
@@ -108,19 +109,43 @@ export default class Hunk extends Command {
         logger.info('Using precise mode (U0 context)')
       }
       
+      // Track staging summary
+      let totalHunks = 0
+      const stagedFiles: string[] = []
+      const stagedDetails: string[] = []
+      
       // Stage hunks for each file
       for (const [file, selectors] of fileHunks) {
         if (selectors.length === 1) {
           await staging.stageHunk(file, selectors[0], { precise, dryRun })
           if (!dryRun) {
             logger.success(`Staged hunk ${selectors[0]} from ${file}`)
+            totalHunks += 1
+            stagedFiles.push(file)
+            stagedDetails.push(`${file}:${selectors[0]}`)
           }
         } else {
           await staging.stageHunks(file, selectors, { precise, dryRun })
           if (!dryRun) {
             logger.success(`Staged hunks ${selectors.join(', ')} from ${file}`)
+            totalHunks += selectors.length
+            stagedFiles.push(file)
+            stagedDetails.push(`${file}:${selectors.join(',')}`)
           }
         }
+      }
+      
+      // Show summary
+      if (!dryRun && totalHunks > 0) {
+        this.log('')
+        this.log(chalk.green('─'.repeat(60)))
+        this.log(chalk.green.bold(`✓ Successfully staged ${totalHunks} hunk${totalHunks > 1 ? 's' : ''} across ${stagedFiles.length} file${stagedFiles.length > 1 ? 's' : ''}`))
+        if (stagedDetails.length <= 3) {
+          stagedDetails.forEach(detail => {
+            this.log(chalk.green(`  • ${detail}`))
+          })
+        }
+        this.log(chalk.green('─'.repeat(60)))
       }
       
     } catch (error) {

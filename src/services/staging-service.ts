@@ -112,9 +112,16 @@ export class StagingService {
     const hunk = this.cache.findHunk(hunks, hunkSelector)
     
     if (!hunk) {
+      const mode = options?.precise ? 'precise' : 'normal'
+      const modeFlag = options?.precise ? ' -p' : ''
       throw new StagingError(
         `Hunk '${hunkSelector}' not found. File has ${hunks.length} hunks.`,
-        hunks
+        hunks,
+        {
+          mode: mode as 'normal' | 'precise',
+          filePath,
+          suggestCommand: `npx git-tweezers list${modeFlag} ${filePath}`
+        }
       )
     }
     
@@ -302,9 +309,16 @@ export class StagingService {
     }
     
     if (notFoundSelectors.length > 0) {
+      const mode = options?.precise ? 'precise' : 'normal'
+      const modeFlag = options?.precise ? ' -p' : ''
       throw new StagingError(
         `Hunks not found: ${notFoundSelectors.join(', ')}. File has ${hunks.length} hunks.`,
-        hunks
+        hunks,
+        {
+          mode: mode as 'normal' | 'precise',
+          filePath,
+          suggestCommand: `npx git-tweezers list${modeFlag} ${filePath}`
+        }
       )
     }
     

@@ -19,8 +19,9 @@ git-tweezers is a non-interactive tool that enables precise staging at hunk and 
 ```bash
 # List all changed files
 npx git-tweezers list
+# Shows current mode (normal/precise) and mode-specific IDs
 
-# List changed hunks in a file
+# List changed hunks in a file  
 npx git-tweezers list <filename>
 
 # Output format: [index|ID] header stats | summary
@@ -34,6 +35,12 @@ npx git-tweezers list -p <filename>
 
 # Preview full diff content
 npx git-tweezers list --preview <filename>
+
+# Filter options for large repositories
+npx git-tweezers list --exclude 'vendor/**' --exclude 'node_modules/**'
+npx git-tweezers list --respect-gitignore  # Exclude files in .gitignore
+npx git-tweezers list --tracked-only        # Show only tracked files
+npx git-tweezers list --staged-only         # Show only staged changes
 ```
 
 ### 2. Hunk-level Staging
@@ -83,6 +90,8 @@ npx git-tweezers lines <filename> 10-20 --dry-run
 
 # Examples
 npx git-tweezers lines src/utils.ts 10-25
+# Shows summary: "✓ Successfully staged 16 lines from src/utils.ts"
+
 npx git-tweezers lines src/utils.ts 42
 npx git-tweezers lines src/utils.ts 10-20 -d  # Dry-run
 ```
@@ -138,6 +147,7 @@ npx git-tweezers undo --step 2
   
   # You can also stage multiple hunks at once
   npx git-tweezers hunk config.js:a3f5,b8d2  # Stage both hunks together
+  # Shows staging summary: "✓ Successfully staged 2 hunks across 1 file"
   ```
 - **Mode consistency**: Always match modes between `list` and `hunk` commands
   ```bash
@@ -151,7 +161,15 @@ npx git-tweezers undo --step 2
   ```
 - **Large hunks**: Use `-p` (precise mode) or `lines` command to select only needed lines
 - **Preview changes**: Always use `--dry-run` to verify before staging
-- **Error recovery**: When staging fails, the error shows all remaining hunks with their IDs
+- **Error recovery**: Enhanced error messages provide:
+  - Mode mismatch detection and guidance
+  - File modification warnings with suggested commands
+  - All available hunks with their current IDs
+  ```bash
+  # If you get "Hunk not found" error, the message will suggest:
+  # - Check if modes match (list and hunk both need -p or neither)
+  # - Re-run list to get fresh IDs if file was modified
+  ```
 - **Debug info**: Enable detailed logging with DEBUG=1 environment variable
   ```bash
   DEBUG=1 npx git-tweezers list src/index.ts

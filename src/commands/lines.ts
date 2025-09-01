@@ -1,4 +1,5 @@
 import { Command, Args, Flags } from '@oclif/core'
+import chalk from 'chalk'
 import { StagingService } from '../services/staging-service.js'
 import { logger, LogLevel } from '../utils/logger.js'
 import { parseLineRanges, formatRanges } from '../utils/range-parser.js'
@@ -58,6 +59,14 @@ export default class Lines extends Command {
       
       if (!dryRun) {
         logger.success(`Staged lines ${formatRanges(ranges)} from ${args.file}`)
+        
+        // Show summary
+        const totalLines = ranges.reduce((sum, range) => sum + (range.end - range.start + 1), 0)
+        this.log('')
+        this.log(chalk.green('─'.repeat(60)))
+        this.log(chalk.green.bold(`✓ Successfully staged ${totalLines} line${totalLines > 1 ? 's' : ''} from ${args.file}`))
+        this.log(chalk.green(`  • Lines: ${formatRanges(ranges)}`))
+        this.log(chalk.green('─'.repeat(60)))
       }
       
     } catch (error) {

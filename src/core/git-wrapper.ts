@@ -40,22 +40,38 @@ export class GitWrapper {
     return this.execute(['diff', `-U${context}`])
   }
 
-  async getChangedFiles(): Promise<string[]> {
-    // Get modified/staged files
-    const modifiedOutput = await this.execute(['diff', '--name-only'])
-    const modifiedFiles = modifiedOutput.split('\n').filter(line => line.trim())
+  async getChangedFiles(options?: {
+    trackedOnly?: boolean
+    stagedOnly?: boolean
+    respectGitignore?: boolean
+  }): Promise<string[]> {
+    const files = new Set<string>()
     
-    // Get staged files (in case they're staged but not modified)
+    if (!options?.stagedOnly) {
+      // Get modified files
+      const modifiedOutput = await this.execute(['diff', '--name-only'])
+      const modifiedFiles = modifiedOutput.split('\n').filter(line => line.trim())
+      modifiedFiles.forEach(f => files.add(f))
+    }
+    
+    // Get staged files
     const cachedOutput = await this.execute(['diff', '--cached', '--name-only'])
     const cachedFiles = cachedOutput.split('\n').filter(line => line.trim())
+    cachedFiles.forEach(f => files.add(f))
     
-    // Get untracked files
-    const untrackedOutput = await this.execute(['ls-files', '--others', '--exclude-standard'])
-    const untrackedFiles = untrackedOutput.split('\n').filter(line => line.trim())
+    if (!options?.trackedOnly && !options?.stagedOnly) {
+      // Get untracked files
+      const untrackedArgs = ['ls-files', '--others']
+      if (options?.respectGitignore !== false) {
+        // By default, exclude standard (respect .gitignore)
+        untrackedArgs.push('--exclude-standard')
+      }
+      const untrackedOutput = await this.execute(untrackedArgs)
+      const untrackedFiles = untrackedOutput.split('\n').filter(line => line.trim())
+      untrackedFiles.forEach(f => files.add(f))
+    }
     
-    // Combine and deduplicate
-    const allFiles = new Set([...modifiedFiles, ...cachedFiles, ...untrackedFiles])
-    return Array.from(allFiles).sort()
+    return Array.from(files).sort()
   }
 
   async diffCached(file?: string, context = 3): Promise<string> {

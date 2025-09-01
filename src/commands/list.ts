@@ -42,6 +42,24 @@ export default class List extends Command {
       description: 'Number of context lines to show in preview',
       default: 3,
     }),
+    exclude: Flags.string({
+      char: 'e',
+      description: 'Exclude files matching the pattern (can be used multiple times)',
+      multiple: true,
+      default: [],
+    }),
+    'respect-gitignore': Flags.boolean({
+      description: 'Exclude files that are in .gitignore',
+      default: false,
+    }),
+    'tracked-only': Flags.boolean({
+      description: 'Show only tracked files (exclude untracked)',
+      default: false,
+    }),
+    'staged-only': Flags.boolean({
+      description: 'Show only files that have staged changes',
+      default: false,
+    }),
   }
 
   static args = {
@@ -70,10 +88,30 @@ export default class List extends Command {
       // Get files to process
       let files: string[]
       if (argv.length === 0) {
-        // No files specified, get all changed files
-        files = await git.getChangedFiles()
+        // No files specified, get all changed files with filters
+        files = await git.getChangedFiles({
+          trackedOnly: flags['tracked-only'],
+          stagedOnly: flags['staged-only'],
+          respectGitignore: flags['respect-gitignore']
+        })
+        
+        // Apply exclude patterns
+        if (flags.exclude && flags.exclude.length > 0) {
+          const excludePatterns = flags.exclude
+          files = files.filter(file => {
+            return !excludePatterns.some(pattern => {
+              // Simple glob matching - supports * and **
+              const regex = pattern
+                .replace(/\*\*/g, '.*')
+                .replace(/\*/g, '[^/]*')
+                .replace(/\?/g, '.')
+              return new RegExp(`^${regex}$`).test(file)
+            })
+          })
+        }
+        
         if (files.length === 0) {
-          this.log(chalk.yellow('No changes found in repository'))
+          this.log(chalk.yellow('No changes found in repository (after applying filters)'))
           return
         }
       } else {
@@ -86,6 +124,11 @@ export default class List extends Command {
       const showPreview = flags.preview || (!flags.oneline && !flags.inline)
       const showInline = flags.inline || (flags.oneline && !flags.preview)
       let hasChanges = false
+      
+      // Display current mode at the top
+      this.log(chalk.dim('─'.repeat(60)))
+      this.log(chalk.cyan(`Mode: ${precise ? 'precise (-p)' : 'normal'} | Hunk IDs are mode-specific`))
+      this.log(chalk.dim('─'.repeat(60)))
       
       for (const file of files) {
         try {
@@ -137,11 +180,14 @@ export default class List extends Command {
       
       this.log('')
       this.log(chalk.dim('─'.repeat(60)))
-      this.log(`Use: ${chalk.cyan(`${this.config.bin} hunk <file>:<number|id>`)} to stage a specific hunk`)
-      this.log(`     ${chalk.cyan(`${this.config.bin} hunk <file> <number|id>`)} (original syntax)`)
+      const modeFlag = precise ? ' -p' : ''
+      this.log(`Use: ${chalk.cyan(`${this.config.bin} hunk${modeFlag} <file>:<number|id>`)} to stage a specific hunk`)
+      this.log(`     ${chalk.cyan(`${this.config.bin} hunk${modeFlag} <file> <number|id>`)} (original syntax)`)
       
       if (!precise) {
         this.log(`\nTip: Use ${chalk.yellow('-p')} or ${chalk.yellow('--precise')} for more granular hunks`)
+      } else {
+        this.log(`\n${chalk.dim('Note: Using precise mode - remember to use -p with hunk command too')}`)
       }
       
     } catch (error) {
