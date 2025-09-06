@@ -53,21 +53,42 @@ export class StagingService {
     }
     
     const context = options?.precise ? 0 : 3
-    const diff = await this.git.diff(filePath, context)
     
-    if (!diff) {
-      return []
+    // Get both staged and unstaged diffs
+    const { staged, unstaged } = await this.git.getDualLayerDiff(filePath, context)
+    
+    const allHunks: HunkInfo[] = []
+    let index = 1
+    
+    // Parse staged hunks
+    if (staged) {
+      const stagedFiles = this.parser.parseFilesWithInfo(staged)
+      const stagedFile = stagedFiles.find(f => f.newPath === filePath || f.oldPath === filePath)
+      if (stagedFile) {
+        const mappedStagedHunks = this.cache.mapHunks(filePath, stagedFile.hunks)
+        mappedStagedHunks.forEach(hunk => {
+          hunk.index = index++
+          hunk.layer = 'staged'
+          allHunks.push(hunk)
+        })
+      }
     }
     
-    const files = this.parser.parseFilesWithInfo(diff)
-    const file = files.find(f => f.newPath === filePath || f.oldPath === filePath)
-    
-    if (!file) {
-      return []
+    // Parse unstaged hunks
+    if (unstaged) {
+      const unstagedFiles = this.parser.parseFilesWithInfo(unstaged)
+      const unstagedFile = unstagedFiles.find(f => f.newPath === filePath || f.oldPath === filePath)
+      if (unstagedFile) {
+        const mappedUnstagedHunks = this.cache.mapHunks(filePath, unstagedFile.hunks)
+        mappedUnstagedHunks.forEach(hunk => {
+          hunk.index = index++
+          hunk.layer = 'unstaged'
+          allHunks.push(hunk)
+        })
+      }
     }
     
-    // Map hunks with cache to maintain stable IDs
-    return this.cache.mapHunks(filePath, file.hunks)
+    return allHunks
   }
 
   /**

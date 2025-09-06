@@ -61,7 +61,8 @@ function extractContext(changes: ExtendedLineChange[]): {
 
 /**
  * Generate a stable content-based fingerprint for a hunk
- * Based on O3's suggestion: uses content + context, excludes line numbers
+ * Based on O3's suggestion: normalize content to be independent of +/- prefixes
+ * This ensures the same content has the same ID whether staged or unstaged
  */
 export function generateContentFingerprint(
   hunk: ParsedHunk,
@@ -75,21 +76,21 @@ export function generateContentFingerprint(
   // Extract context and changes
   const { before, after, actualChanges } = extractContext(hunk.changes)
   
-  // Hash normalized context before
+  // Hash normalized context before (without prefixes)
   before.forEach(line => {
-    hash.update('C-' + normalizeLine(line) + '\n')
+    hash.update(normalizeLine(line) + '\n')
   })
   
-  // Hash actual changes with their types
+  // Hash actual changes WITHOUT their types (no +/- prefix)
+  // This makes the fingerprint identical whether the change is staged or unstaged
   actualChanges.forEach(change => {
-    const prefix = change.type === 'AddedLine' ? '+' : 
-                   change.type === 'DeletedLine' ? '-' : ' '
-    hash.update(prefix + normalizeLine(change.content) + '\n')
+    // Just use the content, not the type
+    hash.update(normalizeLine(change.content) + '\n')
   })
   
-  // Hash normalized context after
+  // Hash normalized context after (without prefixes)
   after.forEach(line => {
-    hash.update('C+' + normalizeLine(line) + '\n')
+    hash.update(normalizeLine(line) + '\n')
   })
   
   return hash.digest('hex')

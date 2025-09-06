@@ -14,6 +14,7 @@ export interface HunkInfo {
     additions: number
     deletions: number
   }
+  layer?: 'staged' | 'unstaged' | 'both' // Track which layer the hunk is in
 }
 
 export interface FileInfo {

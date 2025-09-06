@@ -80,6 +80,18 @@ export class GitWrapper {
     return this.execute(args)
   }
 
+  /**
+   * Get both staged and unstaged diffs for a file
+   * Returns an object with both diffs for dual-layer tracking
+   */
+  async getDualLayerDiff(file: string, context = 3): Promise<{ staged: string; unstaged: string }> {
+    const [staged, unstaged] = await Promise.all([
+      this.diffCached(file, context),
+      this.diff(file, context)
+    ])
+    return { staged, unstaged }
+  }
+
   async apply(patch: string, cached = true): Promise<void> {
     const args = ['apply']
     if (cached) args.push('--cached')
