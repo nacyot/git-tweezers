@@ -145,13 +145,27 @@ export default class List extends Command {
           
           hunks.forEach((hunk) => {
             // Format: [index|id] header (stats) | summary
-            let line = chalk.green(`  [${hunk.index}|${hunk.id}] ${hunk.header}`)
+            let prefix = '  '
+            let color = chalk.green
+            
+            // Show staged status
+            if (hunk.layer === 'staged') {
+              prefix = '✓ '
+              color = chalk.gray
+            }
+            
+            let line = color(`${prefix}[${hunk.index}|${hunk.id}] ${hunk.header}`)
             
             if (showInline) {
               const summary = renderer.renderHunkSummary(hunk)
               if (summary) {
                 line += ' ' + summary
               }
+            }
+            
+            // Add [STAGED] indicator
+            if (hunk.layer === 'staged') {
+              line += chalk.yellow(' [STAGED]')
             }
             
             this.log(line)
