@@ -55,8 +55,9 @@ function divide(a, b) {
 
   describe('Dry-run mode', () => {
     it('should show patch without applying in dry-run mode', async () => {
-      const result = await execa('node', [binPath, 'hunk', 'test.js:1', '--dry-run'], {
+      const result = await execa('node', [binPath, 'hunk', 'test.js', '1', '--dry-run'], {
         cwd: testDir,
+        env: { ...process.env, OCLIF_TS_NODE: 'false' },
       })
       
       expect(result.stdout).toContain('[DRY RUN]')
@@ -71,6 +72,7 @@ function divide(a, b) {
     it('should work with lines command', async () => {
       const result = await execa('node', [binPath, 'lines', 'test.js', '1-3', '--dry-run'], {
         cwd: testDir,
+        env: { ...process.env, OCLIF_TS_NODE: 'false' },
       })
       
       expect(result.stdout).toContain('[DRY RUN]')
@@ -81,14 +83,14 @@ function divide(a, b) {
   describe('Undo functionality', () => {
     it('should undo last staging operation', async () => {
       // Stage a hunk
-      await execa('node', [binPath, 'hunk', 'test.js:1'], { cwd: testDir })
+      await execa('node', [binPath, 'hunk', 'test.js', '1'], { cwd: testDir, env: { ...process.env, OCLIF_TS_NODE: 'false' } })
       
       // Verify it was staged
       let diffCached = await execa('git', ['diff', '--cached'], { cwd: testDir })
       expect(diffCached.stdout).toContain('function add')
       
       // Undo the staging
-      const undoResult = await execa('node', [binPath, 'undo'], { cwd: testDir })
+      const undoResult = await execa('node', [binPath, 'undo'], { cwd: testDir, env: { ...process.env, OCLIF_TS_NODE: 'false' } })
       expect(undoResult.stderr).toContain('Successfully undid')
       
       // Verify it was unstaged
@@ -98,16 +100,16 @@ function divide(a, b) {
 
     it('should list staging history', async () => {
       // Stage a hunk
-      await execa('node', [binPath, 'hunk', 'test.js:1'], { cwd: testDir })
+      await execa('node', [binPath, 'hunk', 'test.js', '1'], { cwd: testDir, env: { ...process.env, OCLIF_TS_NODE: 'false' } })
       
       // List history
-      const listResult = await execa('node', [binPath, 'undo', '--list'], { cwd: testDir })
+      const listResult = await execa('node', [binPath, 'undo', '--list'], { cwd: testDir, env: { ...process.env, OCLIF_TS_NODE: 'false' } })
       expect(listResult.stdout).toContain('[0]')
       expect(listResult.stdout).toContain('Stage hunk 1 from test.js')
     })
 
     it('should handle empty history gracefully', async () => {
-      const result = await execa('node', [binPath, 'undo', '--list'], { cwd: testDir })
+      const result = await execa('node', [binPath, 'undo', '--list'], { cwd: testDir, env: { ...process.env, OCLIF_TS_NODE: 'false' } })
       expect(result.stderr).toContain('No staging history available')
     })
   })

@@ -40,7 +40,9 @@ describe('Install Command', () => {
 
   describe('Local installation', () => {
     it('should install template in local .claude/commands directory with --force', async () => {
-      const { stdout } = await execa('node', [cliPath, 'install', '--force'])
+      const { stdout } = await execa('node', [cliPath, 'install', '--force'], {
+        env: { ...process.env, OCLIF_TS_NODE: 'false' }
+      })
       
       expect(stdout).toContain('Smart-commit template successfully installed')
       // Check for path with either forward or backward slashes
@@ -57,7 +59,9 @@ describe('Install Command', () => {
       // Remove .git directory
       await rm(join(tempDir, '.git'), { recursive: true, force: true })
 
-      await expect(execa('node', [cliPath, 'install'])).rejects.toMatchObject({
+      await expect(execa('node', [cliPath, 'install'], {
+        env: { ...process.env, OCLIF_TS_NODE: 'false' }
+      })).rejects.toMatchObject({
         stderr: expect.stringContaining('Not inside a git repository')
       })
     })
@@ -81,7 +85,9 @@ describe('Install Command', () => {
           // File doesn't exist, that's fine
         }
         
-        const { stdout } = await execa('node', [cliPath, 'install', '--global'])
+        const { stdout } = await execa('node', [cliPath, 'install', '--global'], {
+          env: { ...process.env, OCLIF_TS_NODE: 'false' }
+        })
         
         expect(stdout).toContain('Smart-commit template successfully installed')
         expect(stdout).toContain(homeSmartCommitPath)
@@ -104,7 +110,7 @@ describe('Install Command', () => {
       
       await expect(
         execa('node', [cliPath, 'install', '--global'], {
-          env: { ...process.env, HOME: fakeHome }
+          env: { ...process.env, HOME: fakeHome, OCLIF_TS_NODE: 'false' }
         })
       ).rejects.toMatchObject({
         stderr: expect.stringContaining('Claude settings folder not found')
@@ -120,7 +126,9 @@ describe('Install Command', () => {
       await mkdir(join(tempDir, '.claude', 'commands'), { recursive: true })
       await writeFile(join(tempDir, '.claude', 'commands', 'smart-commit.md'), 'existing content')
 
-      const { stdout } = await execa('node', [cliPath, 'install', '--force'])
+      const { stdout } = await execa('node', [cliPath, 'install', '--force'], {
+        env: { ...process.env, OCLIF_TS_NODE: 'false' }
+      })
       
       expect(stdout).toContain('Smart-commit template successfully installed')
       

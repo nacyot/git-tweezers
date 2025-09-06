@@ -102,7 +102,7 @@ describe('Worktree Support', () => {
       
       // Run list command directly
       const binPath = join(process.cwd(), 'bin', 'run.js')
-      const result = await execa('node', [binPath, 'list', 'test.js'], { cwd: worktreeDir })
+      const result = await execa('node', [binPath, 'list', 'test.js'], { cwd: worktreeDir, env: { ...process.env, OCLIF_TS_NODE: 'false' } })
       
       expect(result.stdout).toContain('test.js:')
       expect(result.stdout).toContain('[1|')
@@ -115,7 +115,7 @@ describe('Worktree Support', () => {
       
       // Stage the hunk directly
       const binPath = join(process.cwd(), 'bin', 'run.js')
-      const result = await execa('node', [binPath, 'hunk', 'test.js:1'], { cwd: worktreeDir })
+      const result = await execa('node', [binPath, 'hunk', 'test.js', '1'], { cwd: worktreeDir, env: { ...process.env, OCLIF_TS_NODE: 'false' } })
       
       expect(result.exitCode).toBe(0)
       expect(result.stderr).toContain('Staged hunk')
@@ -130,10 +130,10 @@ describe('Worktree Support', () => {
       const testFile = join(worktreeDir, 'test.js')
       await writeFile(testFile, 'console.log("hello")\nconsole.log("world")')
       const binPath = join(process.cwd(), 'bin', 'run.js')
-      await execa('node', [binPath, 'hunk', 'test.js:1'], { cwd: worktreeDir })
+      await execa('node', [binPath, 'hunk', 'test.js', '1'], { cwd: worktreeDir, env: { ...process.env, OCLIF_TS_NODE: 'false' } })
       
       // Undo the staging directly
-      const undoResult = await execa('node', [binPath, 'undo'], { cwd: worktreeDir })
+      const undoResult = await execa('node', [binPath, 'undo'], { cwd: worktreeDir, env: { ...process.env, OCLIF_TS_NODE: 'false' } })
       expect(undoResult.exitCode).toBe(0)
       
       // Verify it was undone

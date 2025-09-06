@@ -61,7 +61,7 @@ describe('Untracked Directory Support', () => {
       await writeFile(join(tempDir, 'features', 'feature2.ts'), 'export const feature2 = true')
       
       // Run list command
-      const result = await execa('node', [binPath, 'list'], { cwd: tempDir })
+      const result = await execa('node', [binPath, 'list'], { cwd: tempDir, env: { ...process.env, OCLIF_TS_NODE: 'false' } })
       
       expect(result.stdout).toContain('features/feature1.ts')
       expect(result.stdout).toContain('features/feature2.ts')
@@ -163,7 +163,7 @@ describe('Untracked Directory Support', () => {
       expect(files).toContain('mixed/untracked2.js')
       
       // List should show all files
-      const result = await execa('node', [binPath, 'list'], { cwd: tempDir })
+      const result = await execa('node', [binPath, 'list'], { cwd: tempDir, env: { ...process.env, OCLIF_TS_NODE: 'false' } })
       
       expect(result.stdout).toContain('mixed/tracked.js')
       expect(result.stdout).toContain('mixed/untracked1.js')
