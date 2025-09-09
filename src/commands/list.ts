@@ -49,8 +49,8 @@ export default class List extends Command {
       default: [],
     }),
     'respect-gitignore': Flags.boolean({
-      description: 'Exclude files that are in .gitignore',
-      default: false,
+      description: 'Exclude files that are in .gitignore (default: true)',
+      default: true,
     }),
     'tracked-only': Flags.boolean({
       description: 'Show only tracked files (exclude untracked)',
