@@ -17,8 +17,15 @@ export interface HunkInfo {
   layer?: 'staged' | 'unstaged' | 'both' // Track which layer the hunk is in
 }
 
+export interface FileMetadata {
+  mode?: { old: string; new: string }
+  rename?: { from: string; to: string }
+  copy?: { from: string; to: string }
+}
+
 export interface FileInfo {
   oldPath: string
   newPath: string
   hunks: HunkInfo[]
+  metadata?: FileMetadata
 }

@@ -226,4 +226,76 @@ export class GitWrapper {
       return join(this.cwd || process.cwd(), '.git')
     }
   }
+
+  // ── Tree-snapshot methods for undo ──
+
+  /**
+   * Write the current index to a tree object.
+   * Returns the SHA of the tree. Uses --missing-ok to handle intent-to-add entries.
+   */
+  async writeTree(): Promise<string> {
+    return (await this.execute(['write-tree', '--missing-ok'])).trim()
+  }
+
+  /**
+   * Restore the index from a tree object.
+   * This replaces the current index content with the tree's content.
+   */
+  async readTree(treeSha: string): Promise<void> {
+    await this.execute(['read-tree', treeSha])
+  }
+
+  /**
+   * Check if the index has unresolved merge conflicts.
+   */
+  async hasConflicts(): Promise<boolean> {
+    try {
+      const output = await this.execute(['diff', '--name-only', '--diff-filter=U', '--cached'])
+      return output.trim().length > 0
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Save a tree SHA as a ref to prevent garbage collection.
+   */
+  async saveSnapshotRef(id: string, treeSha: string): Promise<void> {
+    await this.execute(['update-ref', `refs/tweezers/undo/${id}`, treeSha])
+  }
+
+  /**
+   * Load a tree SHA from a snapshot ref.
+   */
+  async loadSnapshotRef(id: string): Promise<string | null> {
+    try {
+      const sha = await this.execute(['rev-parse', '--verify', '-q', `refs/tweezers/undo/${id}`])
+      return sha.trim() || null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Delete a snapshot ref.
+   */
+  async dropSnapshotRef(id: string): Promise<void> {
+    try {
+      await this.execute(['update-ref', '-d', `refs/tweezers/undo/${id}`])
+    } catch {
+      // Ref may already be deleted
+    }
+  }
+
+  /**
+   * Check if HEAD exists (needed to detect initial commit state).
+   */
+  async hasHead(): Promise<boolean> {
+    try {
+      await this.execute(['rev-parse', 'HEAD'])
+      return true
+    } catch {
+      return false
+    }
+  }
 }

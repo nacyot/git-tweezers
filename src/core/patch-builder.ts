@@ -1,4 +1,5 @@
 import type { ExtendedLineChange } from '../types/extended-diff.js'
+import type { FileMetadata } from '../types/hunk-info.js'
 
 export interface HunkData {
   header: string
@@ -9,6 +10,7 @@ export interface FileData {
   oldPath: string
   newPath: string
   hunks: HunkData[]
+  metadata?: FileMetadata
 }
 
 export class PatchBuilder {
@@ -18,6 +20,25 @@ export class PatchBuilder {
     for (const file of files) {
       // Add file header
       patches.push(`diff --git a/${file.oldPath} b/${file.newPath}`)
+
+      // Emit mode change headers if present
+      if (file.metadata?.mode) {
+        patches.push(`old mode ${file.metadata.mode.old}`)
+        patches.push(`new mode ${file.metadata.mode.new}`)
+      }
+
+      // Emit rename headers if present
+      if (file.metadata?.rename) {
+        patches.push(`rename from ${file.metadata.rename.from}`)
+        patches.push(`rename to ${file.metadata.rename.to}`)
+      }
+
+      // Emit copy headers if present
+      if (file.metadata?.copy) {
+        patches.push(`copy from ${file.metadata.copy.from}`)
+        patches.push(`copy to ${file.metadata.copy.to}`)
+      }
+
       patches.push(`index 0000000..0000000 100644`)
       patches.push(`--- a/${file.oldPath}`)
       patches.push(`+++ b/${file.newPath}`)

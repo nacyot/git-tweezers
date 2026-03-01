@@ -26,7 +26,7 @@ describe('hunk-id', () => {
       const id2 = generateHunkId(hunk, 'test.js')
       
       expect(id1).toBe(id2)
-      expect(id1).toHaveLength(4)
+      expect(id1).toHaveLength(8)
     })
 
     it('should generate different IDs for different files', () => {

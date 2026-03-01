@@ -69,30 +69,30 @@ export function generateContentFingerprint(
   filePath: string
 ): string {
   const hash = createHash('sha256')
-  
+
   // Include file path for uniqueness across files
   hash.update(filePath + '\n')
-  
+
   // Extract context and changes
   const { before, after, actualChanges } = extractContext(hunk.changes)
-  
+
   // Hash normalized context before (without prefixes)
   before.forEach(line => {
     hash.update(normalizeLine(line) + '\n')
   })
-  
+
   // Hash actual changes WITHOUT their types (no +/- prefix)
   // This makes the fingerprint identical whether the change is staged or unstaged
   actualChanges.forEach(change => {
     // Just use the content, not the type
     hash.update(normalizeLine(change.content) + '\n')
   })
-  
+
   // Hash normalized context after (without prefixes)
   after.forEach(line => {
     hash.update(normalizeLine(line) + '\n')
   })
-  
+
   return hash.digest('hex')
 }
 
@@ -106,9 +106,9 @@ export function generateHunkId(
   existingIds?: Set<string>
 ): string {
   const fingerprint = generateContentFingerprint(hunk, filePath)
-  
-  // Start with 4 characters, increase if collision
-  let length = 4
+
+  // Start with 8 characters, increase if collision
+  let length = 8
   let id = fingerprint.substring(0, length)
   
   // Handle collisions by increasing length

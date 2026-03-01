@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
+import { createHash } from 'crypto'
 import { GitWrapper } from '../core/git-wrapper.js'
 import type { HunkInfo } from '../types/hunk-info.js'
 import { generateContentFingerprint } from '../core/hunk-id.js'
@@ -11,14 +12,38 @@ interface FingerprintEntry {
   lastSeen: number
 }
 
-interface HistoryEntry {
+// Legacy patch-based history entry (v1)
+interface LegacyHistoryEntry {
   id: string
   timestamp: number
   patch: string
   files: string[]
   selectors: Array<string | number>
   description?: string
+  type?: 'patch'
 }
+
+// New tree-snapshot history entry (v2)
+interface TreeHistoryEntry {
+  id: string
+  timestamp: number
+  type: 'tree'
+  tree: string // SHA of index tree snapshot
+  description: string
+  affectedFiles: string[]
+}
+
+export type HistoryEntry = LegacyHistoryEntry | TreeHistoryEntry
+
+export function isTreeEntry(entry: HistoryEntry): entry is TreeHistoryEntry {
+  return entry.type === 'tree'
+}
+
+export function isLegacyEntry(entry: HistoryEntry): entry is LegacyHistoryEntry {
+  return entry.type !== 'tree'
+}
+
+const MAX_HISTORY_ENTRIES = 500
 
 interface CacheData {
   version: number
@@ -104,9 +129,9 @@ export class HunkCacheService {
   mapHunks(filePath: string, hunks: HunkInfo[]): HunkInfo[] {
     const now = Date.now()
     const existingIds = new Set(Object.keys(this.cacheData.usedIds))
-    
-    const updatedHunks = hunks.map(hunk => {
-      // Generate content-based fingerprint
+
+    // Phase 1: compute base fingerprints for all hunks
+    const baseFingerprints = hunks.map(hunk => {
       const parsedHunk: ParsedHunk = {
         index: hunk.index,
         header: hunk.header,
@@ -116,9 +141,32 @@ export class HunkCacheService {
         newLines: hunk.newLines,
         changes: hunk.changes,
       }
-      
-      const fingerprint = generateContentFingerprint(parsedHunk, filePath)
-      
+      return generateContentFingerprint(parsedHunk, filePath)
+    })
+
+    // Phase 2: count occurrences and assign occurrence indices
+    const fingerprintOccurrences = new Map<string, number>()
+    const occurrenceIndices = baseFingerprints.map(fp => {
+      const count = fingerprintOccurrences.get(fp) || 0
+      fingerprintOccurrences.set(fp, count + 1)
+      return count // 0-based
+    })
+
+    // Phase 3: generate IDs with derived fingerprints for duplicates
+    const updatedHunks = hunks.map((hunk, i) => {
+      const baseFp = baseFingerprints[i]
+      const occIdx = occurrenceIndices[i]
+      const totalOcc = fingerprintOccurrences.get(baseFp)!
+
+      // Derive a unique fingerprint for duplicate content hunks (occurrence > 0)
+      let fingerprint = baseFp
+      if (totalOcc > 1 && occIdx > 0) {
+        const hash = createHash('sha256')
+        hash.update(baseFp)
+        hash.update(`\x00occurrence:${occIdx}`)
+        fingerprint = hash.digest('hex')
+      }
+
       // Check if we already have an ID for this fingerprint
       if (this.cacheData.fingerprints[fingerprint]) {
         const cachedId = this.cacheData.fingerprints[fingerprint]
@@ -128,17 +176,17 @@ export class HunkCacheService {
         }
         return { ...hunk, id: cachedId }
       }
-      
+
       // Generate new ID
-      let length = 4
+      let length = 8
       let id = fingerprint.substring(0, length)
-      
+
       // Handle collisions by increasing length
       while (existingIds.has(id) && length < fingerprint.length) {
         length++
         id = fingerprint.substring(0, length)
       }
-      
+
       // Store the mapping
       this.cacheData.fingerprints[fingerprint] = id
       this.cacheData.usedIds[id] = {
@@ -147,10 +195,10 @@ export class HunkCacheService {
         lastSeen: now,
       }
       existingIds.add(id)
-      
+
       return { ...hunk, id }
     })
-    
+
     this.saveCache()
     return updatedHunks
   }
@@ -193,27 +241,47 @@ export class HunkCacheService {
   }
   
   /**
-   * Add a staging history entry
+   * Add a tree-snapshot history entry (new approach).
+   * Stores the tree SHA of the index state before the staging operation.
    */
-  addHistory(entry: Omit<HistoryEntry, 'id' | 'timestamp'>): void {
-    const historyEntry: HistoryEntry = {
+  addTreeHistory(entry: { tree: string; description: string; affectedFiles: string[] }): void {
+    const historyEntry: TreeHistoryEntry = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      timestamp: Date.now(),
+      type: 'tree',
+      tree: entry.tree,
+      description: entry.description,
+      affectedFiles: entry.affectedFiles,
+    }
+    this.pushHistory(historyEntry)
+  }
+
+  /**
+   * Add a legacy patch-based history entry (kept for backward compatibility).
+   */
+  addHistory(entry: Omit<LegacyHistoryEntry, 'id' | 'timestamp' | 'type'>): void {
+    const historyEntry: LegacyHistoryEntry = {
       id: new Date().toISOString(),
       timestamp: Date.now(),
+      type: 'patch',
       ...entry,
     }
-    
+    this.pushHistory(historyEntry)
+  }
+
+  private pushHistory(entry: HistoryEntry): void {
     if (!this.cacheData.history) {
       this.cacheData.history = []
     }
-    
+
     // Add to beginning of array (newest first)
-    this.cacheData.history.unshift(historyEntry)
-    
-    // Keep only last 20 entries
-    if (this.cacheData.history.length > 20) {
-      this.cacheData.history = this.cacheData.history.slice(0, 20)
+    this.cacheData.history.unshift(entry)
+
+    // Keep history bounded to prevent unbounded growth
+    if (this.cacheData.history.length > MAX_HISTORY_ENTRIES) {
+      this.cacheData.history = this.cacheData.history.slice(0, MAX_HISTORY_ENTRIES)
     }
-    
+
     this.saveCache()
   }
   

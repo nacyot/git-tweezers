@@ -1,10 +1,10 @@
-import parse, { 
-  type AnyFileChange, 
+import parse, {
+  type AnyFileChange,
   type GitDiff,
   type Chunk
 } from 'parse-git-diff'
 import type { ExtendedLineChange } from '../types/extended-diff.js'
-import type { FileInfo } from '../types/hunk-info.js'
+import type { FileInfo, FileMetadata } from '../types/hunk-info.js'
 import { DiffAnalyzer } from './diff-analyzer.js'
 import { generateHunkId, getHunkSummary, getHunkStats } from './hunk-id.js'
 
@@ -25,6 +25,82 @@ export interface ParsedFile {
 }
 
 export class DiffParser {
+  /**
+   * Preprocess raw diff to extract metadata that parse-git-diff doesn't handle.
+   * Strips mode/rename/copy lines, stores them as metadata keyed by file path.
+   */
+  preprocessDiff(raw: string): { cleaned: string; metadata: Map<string, FileMetadata> } {
+    const metadata = new Map<string, FileMetadata>()
+    const lines = raw.split('\n')
+    const cleaned: string[] = []
+    let currentFile: string | null = null
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+
+      // Track current file from diff headers
+      const diffMatch = line.match(/^diff --git a\/(.+?) b\/(.+)$/)
+      if (diffMatch) {
+        currentFile = diffMatch[2]
+        if (!metadata.has(currentFile)) {
+          metadata.set(currentFile, {})
+        }
+        cleaned.push(line)
+        continue
+      }
+
+      if (currentFile) {
+        const meta = metadata.get(currentFile)!
+
+        // old mode / new mode
+        const oldModeMatch = line.match(/^old mode (\d+)$/)
+        if (oldModeMatch) {
+          if (!meta.mode) meta.mode = { old: '', new: '' }
+          meta.mode.old = oldModeMatch[1]
+          continue // strip from cleaned output
+        }
+        const newModeMatch = line.match(/^new mode (\d+)$/)
+        if (newModeMatch) {
+          if (!meta.mode) meta.mode = { old: '', new: '' }
+          meta.mode.new = newModeMatch[1]
+          continue
+        }
+
+        // rename from / rename to
+        const renameFromMatch = line.match(/^rename from (.+)$/)
+        if (renameFromMatch) {
+          if (!meta.rename) meta.rename = { from: '', to: '' }
+          meta.rename.from = renameFromMatch[1]
+          continue
+        }
+        const renameToMatch = line.match(/^rename to (.+)$/)
+        if (renameToMatch) {
+          if (!meta.rename) meta.rename = { from: '', to: '' }
+          meta.rename.to = renameToMatch[1]
+          continue
+        }
+
+        // copy from / copy to
+        const copyFromMatch = line.match(/^copy from (.+)$/)
+        if (copyFromMatch) {
+          if (!meta.copy) meta.copy = { from: '', to: '' }
+          meta.copy.from = copyFromMatch[1]
+          continue
+        }
+        const copyToMatch = line.match(/^copy to (.+)$/)
+        if (copyToMatch) {
+          if (!meta.copy) meta.copy = { from: '', to: '' }
+          meta.copy.to = copyToMatch[1]
+          continue
+        }
+      }
+
+      cleaned.push(line)
+    }
+
+    return { cleaned: cleaned.join('\n'), metadata }
+  }
+
   parse(diffText: string): GitDiff {
     return parse(diffText)
   }
@@ -48,18 +124,22 @@ export class DiffParser {
   }
 
   parseFilesWithInfo(diffText: string): FileInfo[] {
-    const gitDiff = this.parse(diffText)
-    const eolMap = DiffAnalyzer.analyzeEOL(diffText)
-    
+    // Preprocess to extract mode/rename/copy metadata
+    const { cleaned, metadata } = this.preprocessDiff(diffText)
+    const gitDiff = this.parse(cleaned)
+    const eolMap = DiffAnalyzer.analyzeEOL(cleaned)
+
     let globalChangeIndex = 0
-    
+
     return gitDiff.files.map(file => {
       const oldPath = this.getOldPath(file)
       const newPath = this.getNewPath(file)
-      
+      const fileMeta = metadata.get(newPath) || metadata.get(oldPath)
+
       return {
         oldPath,
         newPath,
+        ...(fileMeta && Object.keys(fileMeta).length > 0 ? { metadata: fileMeta } : {}),
         hunks: file.chunks
           .filter((chunk): chunk is Chunk => chunk.type === 'Chunk')
           .map((chunk, index) => {

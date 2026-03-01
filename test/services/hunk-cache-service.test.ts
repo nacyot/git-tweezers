@@ -3,20 +3,22 @@ import { HunkCacheService } from '../../src/services/hunk-cache-service.js'
 import type { HunkInfo } from '../../src/types/hunk-info.js'
 import { rmSync, existsSync } from 'fs'
 import { join } from 'path'
+import { execSync } from 'child_process'
 
 describe('HunkCacheService', () => {
   let service: HunkCacheService
   let originalCachePath: string
 
   beforeEach(() => {
-    // Use the current directory (which is a git repo during tests)
-    service = new HunkCacheService()
-    // Store the cache path for cleanup
-    originalCachePath = join(process.cwd(), '.git', 'tweezers-cache.json')
-    // Clear any existing cache
+    // Get actual git dir (may differ in worktrees)
+    const gitDir = execSync('git rev-parse --git-dir', { encoding: 'utf8' }).trim()
+    originalCachePath = join(gitDir, 'tweezers-cache.json')
+    // Clear any existing cache BEFORE creating service (so constructor loads empty)
     if (existsSync(originalCachePath)) {
       rmSync(originalCachePath)
     }
+    // Use the current directory (which is a git repo during tests)
+    service = new HunkCacheService()
   })
 
   afterEach(() => {
@@ -52,8 +54,8 @@ describe('HunkCacheService', () => {
       const secondId = mapped1[1].id
       
       // IDs should be generated based on content
-      expect(firstId).toHaveLength(4)
-      expect(secondId).toHaveLength(4)
+      expect(firstId).toHaveLength(8)
+      expect(secondId).toHaveLength(8)
 
       // Second call with same content (same index/header)
       const sameHunks = [
@@ -73,7 +75,7 @@ describe('HunkCacheService', () => {
       
       // ID should be generated
       const generatedId = mapped[0].id
-      expect(generatedId).toHaveLength(4)
+      expect(generatedId).toHaveLength(8)
       
       // Verify it was cached
       const cached = service.mapHunks('new-file.js', [createMockHunk('different', 1)])
@@ -194,21 +196,20 @@ describe('HunkCacheService', () => {
       expect(service.getHistory()).toHaveLength(0)
     })
 
-    it('should maintain max 20 history entries', () => {
-      // Add 25 entries
-      for (let i = 0; i < 25; i++) {
+    it('should maintain max 500 history entries', () => {
+      // Add 505 entries
+      for (let i = 0; i < 505; i++) {
         service.addHistory({
           patch: `patch${i}`,
           files: [`file${i}.js`],
           selectors: [String(i)],
         })
       }
-      
+
       const history = service.getHistory()
-      expect(history).toHaveLength(20)
-      // Should keep the most recent 20
-      expect(history[0].patch).toBe('patch24')
-      expect(history[19].patch).toBe('patch5')
+      expect(history).toHaveLength(500)
+      // Should keep the most recent 500
+      expect(history[0].patch).toBe('patch504')
     })
   })
 })

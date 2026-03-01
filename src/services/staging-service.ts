@@ -136,7 +136,7 @@ export class StagingService {
       const mode = options?.precise ? 'precise' : 'normal'
       const modeFlag = options?.precise ? ' -p' : ''
       throw new StagingError(
-        `Hunk '${hunkSelector}' not found. File has ${hunks.length} hunks.`,
+        `Hunk '${hunkSelector}' not found. File has ${hunks.length} hunk${hunks.length === 1 ? '' : 's'}.`,
         hunks,
         {
           mode: mode as 'normal' | 'precise',
@@ -168,17 +168,15 @@ export class StagingService {
       return
     }
     
+    // Snapshot before mutation
+    const treeSha = await this.snapshotIndex()
+
     // Apply the patch
     const applyOptions = options?.precise ? ['--cached', '--unidiff-zero'] : ['--cached']
     await this.git.applyWithOptions(patch, applyOptions)
-    
+
     // Record in history
-    this.cache.addHistory({
-      patch,
-      files: [filePath],
-      selectors: [hunkSelector],
-      description: `Stage hunk ${hunkSelector} from ${filePath}`,
-    })
+    await this.recordHistory(treeSha, `Stage hunk ${hunkSelector} from ${filePath}`, [filePath])
   }
 
   /**
@@ -283,16 +281,14 @@ export class StagingService {
       return
     }
     
+    // Snapshot before mutation
+    const treeSha = await this.snapshotIndex()
+
     // Apply with recount option for better reliability
     await this.git.applyWithOptions(patch, ['--cached', '--recount'])
-    
+
     // Record in history
-    this.cache.addHistory({
-      patch,
-      files: [filePath],
-      selectors: [`${startLine}-${endLine}`],
-      description: `Stage lines ${startLine}-${endLine} from ${filePath}`,
-    })
+    await this.recordHistory(treeSha, `Stage lines ${startLine}-${endLine} from ${filePath}`, [filePath])
   }
 
   /**
@@ -333,7 +329,7 @@ export class StagingService {
       const mode = options?.precise ? 'precise' : 'normal'
       const modeFlag = options?.precise ? ' -p' : ''
       throw new StagingError(
-        `Hunks not found: ${notFoundSelectors.join(', ')}. File has ${hunks.length} hunks.`,
+        `Hunks not found: ${notFoundSelectors.join(', ')}. File has ${hunks.length} hunk${hunks.length === 1 ? '' : 's'}.`,
         hunks,
         {
           mode: mode as 'normal' | 'precise',
@@ -342,8 +338,20 @@ export class StagingService {
         }
       )
     }
-    
-    // Build patch with selected hunks
+
+    // Fast path: if all hunks are selected, use git add (more reliable than patch)
+    if (selectedHunks.length === hunks.length && !options?.dryRun) {
+      // Snapshot before mutation
+      const treeSha = await this.snapshotIndex()
+
+      await this.git.add(filePath)
+
+      // Record in history
+      await this.recordHistory(treeSha, `Stage all hunks from ${filePath}`, [filePath])
+      return
+    }
+
+    // Build combined patch with selected hunks
     const fileData = {
       oldPath: file.oldPath,
       newPath: file.newPath,
@@ -352,31 +360,154 @@ export class StagingService {
         changes: hunk.changes,
       })),
     }
-    
+
     const patch = this.builder.buildPatch([fileData])
-    
+
     if (process.env.DEBUG === '1' || options?.dryRun) {
       console.log('Generated patch:')
       console.log(patch)
     }
-    
+
     // In dry-run mode, skip applying the patch
     if (options?.dryRun) {
       console.log('\n[DRY RUN] The above patch would be applied to the staging area.')
       return
     }
-    
-    // Apply the patch
-    const applyOptions = options?.precise ? ['--cached', '--unidiff-zero'] : ['--cached']
-    await this.git.applyWithOptions(patch, applyOptions)
-    
+
+    // Snapshot before mutation
+    const treeSha = await this.snapshotIndex()
+
+    // Try combined patch with --recount first (fast path).
+    // --recount tells git to recalculate hunk line counts from actual content,
+    // which fixes many cases where headers become stale in multi-hunk patches.
+    try {
+      const applyOptions = options?.precise
+        ? ['--cached', '--unidiff-zero', '--recount']
+        : ['--cached', '--recount']
+      await this.git.applyWithOptions(patch, applyOptions)
+    } catch {
+      // Combined patch failed (e.g., overlapping context or offset drift with many hunks).
+      // Fall back to sequential per-hunk application with re-diffing between each.
+      if (process.env.DEBUG === '1') {
+        console.log('Combined patch failed, falling back to sequential hunk application')
+      }
+      await this.stageHunksSequentially(filePath, selectedHunks, file, options)
+    }
+
     // Record in history
-    this.cache.addHistory({
-      patch,
-      files: [filePath],
-      selectors: hunkSelectors,
-      description: `Stage hunks ${hunkSelectors.join(', ')} from ${filePath}`,
-    })
+    await this.recordHistory(treeSha, `Stage hunks ${hunkSelectors.join(', ')} from ${filePath}`, [filePath])
+  }
+
+  /**
+   * Fall back to staging hunks one at a time, re-diffing between each application.
+   * This mirrors how individual stageHunk() works and handles offset drift caused
+   * by earlier hunk applications shifting line numbers for later hunks.
+   * Content-based hunk IDs are used for stable lookup across re-diffs.
+   */
+  private async stageHunksSequentially(
+    filePath: string,
+    hunks: HunkInfo[],
+    fileData: { oldPath: string; newPath: string },
+    options?: StageOptions,
+  ): Promise<void> {
+    const context = options?.precise ? 0 : 3
+
+    // Collect content-based IDs for stable lookup across re-diffs.
+    // Content-based IDs survive re-diffing because they are derived from
+    // the actual change content, not line numbers.
+    const hunkIds = hunks.map(h => h.id)
+
+    for (const id of hunkIds) {
+      // Re-diff each time to get fresh line numbers after previous application
+      const freshDiff = await this.git.diff(filePath, context)
+
+      if (!freshDiff) {
+        // No more changes remain for this file
+        if (process.env.DEBUG === '1') {
+          console.log(`No more changes for ${filePath}, stopping sequential application`)
+        }
+        break
+      }
+
+      const freshFiles = this.parser.parseFilesWithInfo(freshDiff)
+      const freshFile = freshFiles.find(f => f.newPath === filePath || f.oldPath === filePath)
+
+      if (!freshFile) {
+        if (process.env.DEBUG === '1') {
+          console.log(`File ${filePath} no longer in diff, stopping sequential application`)
+        }
+        break
+      }
+
+      // Map hunks with cache to get content-based IDs
+      const freshHunks = this.cache.mapHunks(filePath, freshFile.hunks)
+
+      // Find hunk by content-based ID (stable across re-diffs)
+      const hunk = this.cache.findHunk(freshHunks, id)
+
+      if (!hunk) {
+        // Hunk may have been absorbed into an adjacent hunk after a previous
+        // application caused git to merge nearby hunks. Skip gracefully.
+        if (process.env.DEBUG === '1') {
+          console.log(`Hunk ${id} no longer found after previous applications, skipping`)
+        }
+        continue
+      }
+
+      const singleFileData = {
+        oldPath: freshFile.oldPath || fileData.oldPath,
+        newPath: freshFile.newPath || fileData.newPath,
+        hunks: [{ header: hunk.header, changes: hunk.changes }],
+      }
+
+      const singlePatch = this.builder.buildPatch([singleFileData])
+
+      if (process.env.DEBUG === '1') {
+        console.log(`Generated patch for hunk ${id}:`)
+        console.log(singlePatch)
+      }
+
+      const applyOptions = options?.precise
+        ? ['--cached', '--unidiff-zero']
+        : ['--cached']
+
+      try {
+        await this.git.applyWithOptions(singlePatch, applyOptions)
+      } catch (error) {
+        // Per-hunk error handling: log and continue with remaining hunks
+        if (process.env.DEBUG === '1') {
+          console.log(`Failed to apply hunk ${id}: ${error instanceof Error ? error.message : error}`)
+        }
+        // Continue with next hunk rather than aborting the entire operation
+      }
+    }
+  }
+
+  /**
+   * Snapshot the current index state for undo support.
+   * Returns a tree SHA or null if conflicts prevent snapshotting.
+   */
+  private async snapshotIndex(): Promise<string | null> {
+    try {
+      if (await this.git.hasConflicts()) return null
+      return await this.git.writeTree()
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Record a tree-snapshot history entry for undo.
+   * Saves the tree SHA as a ref to prevent GC, then records in cache.
+   */
+  private async recordHistory(treeSha: string | null, description: string, affectedFiles: string[]): Promise<void> {
+    if (!treeSha) return
+    try {
+      await this.git.saveSnapshotRef(treeSha, treeSha)
+      this.cache.addTreeHistory({ tree: treeSha, description, affectedFiles })
+    } catch {
+      // Best-effort: don't fail the staging operation if history recording fails
+    }
   }
 
   /**

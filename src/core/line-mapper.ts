@@ -47,6 +47,34 @@ export class LineMapper {
   }
   
   /**
+   * Create a map from OLD file line numbers to changes (for deletions)
+   */
+  static mapOldLinesToChanges(hunk: ParsedHunk): Map<number, ExtendedLineChange> {
+    let oldLine = hunk.oldStart
+    let _newLine = hunk.newStart
+    const map = new Map<number, ExtendedLineChange>()
+
+    for (let i = 0; i < hunk.changes.length; i++) {
+      const change = hunk.changes[i]
+      switch (change.type) {
+        case 'UnchangedLine':
+          map.set(oldLine, change)
+          oldLine++
+          _newLine++
+          break
+        case 'DeletedLine':
+          map.set(oldLine, change)
+          oldLine++
+          break
+        case 'AddedLine':
+          _newLine++
+          break
+      }
+    }
+    return map
+  }
+
+  /**
    * Check if a change needs its EOF newline pair
    * This happens when adding a line after a line that has no newline
    */
@@ -111,10 +139,22 @@ export class LineMapper {
       const change = lineMap.get(lineNum)
       if (change && change.type === 'AddedLine') {
         required.add(change)
-        
+
+        // Include paired DeletedLines for replacement patterns
+        // Walk backwards from this AddedLine through preceding DeletedLines
+        const addIdx = hunk.changes.indexOf(change)
+        for (let j = addIdx - 1; j >= 0; j--) {
+          const prev = hunk.changes[j]
+          if (prev.type === 'DeletedLine') {
+            required.add(prev)
+          } else {
+            break // Stop at first non-DeletedLine
+          }
+        }
+
         // Special handling for EOF newline dependencies
         // Check if there's a delete-add pair for the previous line
-        const index = hunk.changes.indexOf(change)
+        const index = addIdx
         
         // Look for pattern: DeletedLine (no eol) followed by AddedLine (with eol)
         if (index >= 2) {
@@ -135,7 +175,19 @@ export class LineMapper {
         }
       }
     }
-    
+
+    // Second pass: if no additions found, try OLD file line numbers for deletions
+    if (required.size === 0) {
+      const oldLineMap = this.mapOldLinesToChanges(hunk)
+
+      for (const lineNum of targetLines) {
+        const change = oldLineMap.get(lineNum)
+        if (change && change.type === 'DeletedLine') {
+          required.add(change)
+        }
+      }
+    }
+
     // Convert to array and sort by original order
     const sortedChanges: ExtendedLineChange[] = []
     for (const change of hunk.changes) {

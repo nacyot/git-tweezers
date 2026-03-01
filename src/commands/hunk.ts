@@ -139,7 +139,7 @@ export default class Hunk extends Command {
       if (!dryRun && totalHunks > 0) {
         this.log('')
         this.log(chalk.green('─'.repeat(60)))
-        this.log(chalk.green.bold(`✓ Successfully staged ${totalHunks} hunk${totalHunks > 1 ? 's' : ''} across ${stagedFiles.length} file${stagedFiles.length > 1 ? 's' : ''}`))
+        this.log(chalk.green.bold(`✓ Successfully staged ${totalHunks} hunk${totalHunks === 1 ? '' : 's'} across ${stagedFiles.length} file${stagedFiles.length === 1 ? '' : 's'}`))
         if (stagedDetails.length <= 3) {
           stagedDetails.forEach(detail => {
             this.log(chalk.green(`  • ${detail}`))
@@ -155,7 +155,7 @@ export default class Hunk extends Command {
       } else {
         logger.error(error instanceof Error ? error.message : String(error))
       }
-      this.exit(1)
+      process.exitCode = 1
     }
   }
 }

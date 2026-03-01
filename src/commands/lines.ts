@@ -64,14 +64,14 @@ export default class Lines extends Command {
         const totalLines = ranges.reduce((sum, range) => sum + (range.end - range.start + 1), 0)
         this.log('')
         this.log(chalk.green('─'.repeat(60)))
-        this.log(chalk.green.bold(`✓ Successfully staged ${totalLines} line${totalLines > 1 ? 's' : ''} from ${args.file}`))
+        this.log(chalk.green.bold(`✓ Successfully staged ${totalLines} line${totalLines === 1 ? '' : 's'} from ${args.file}`))
         this.log(chalk.green(`  • Lines: ${formatRanges(ranges)}`))
         this.log(chalk.green('─'.repeat(60)))
       }
       
     } catch (error) {
       logger.error(error instanceof Error ? error.message : String(error))
-      this.exit(1)
+      process.exitCode = 1
     }
   }
 }

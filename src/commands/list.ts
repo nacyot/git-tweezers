@@ -100,11 +100,20 @@ export default class List extends Command {
           const excludePatterns = flags.exclude
           files = files.filter(file => {
             return !excludePatterns.some(pattern => {
-              // Simple glob matching - supports * and **
+              // Glob to regex conversion
+              // 1. Escape regex metacharacters (except glob wildcards * ? [ ])
+              // 2. Handle ** before * to avoid double replacement
               const regex = pattern
-                .replace(/\*\*/g, '.*')
-                .replace(/\*/g, '[^/]*')
-                .replace(/\?/g, '.')
+                .replace(/[.+^${}()|[\]\\]/g, '\\$&')  // Escape regex metacharacters
+                .replace(/\*\*/g, '\0GLOBSTAR\0')        // Placeholder for **
+                .replace(/\*/g, '[^/]*')                 // * matches anything except /
+                .replace(/\?/g, '.')                     // ? matches single char
+                .replace(/\0GLOBSTAR\0/g, '.*')          // ** matches anything including /
+              // Also match against basename for patterns without path separator
+              if (!pattern.includes('/')) {
+                const basename = file.split('/').pop() || file
+                return new RegExp(`^${regex}$`).test(file) || new RegExp(`^${regex}$`).test(basename)
+              }
               return new RegExp(`^${regex}$`).test(file)
             })
           })
@@ -206,7 +215,7 @@ export default class List extends Command {
       
     } catch (error) {
       logger.error(error instanceof Error ? error.message : String(error))
-      this.exit(1)
+      process.exitCode = 1
     }
   }
 }
