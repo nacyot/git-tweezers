@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { createHash } from 'crypto'
 import { GitWrapper } from '../core/git-wrapper.js'
+import { logger } from '../utils/logger.js'
 import type { HunkInfo } from '../types/hunk-info.js'
 import { generateContentFingerprint } from '../core/hunk-id.js'
 import type { ParsedHunk } from '../core/diff-parser.js'
@@ -43,6 +44,12 @@ export function isLegacyEntry(entry: HistoryEntry): entry is LegacyHistoryEntry 
   return entry.type !== 'tree'
 }
 
+export function getEntryDescription(entry: HistoryEntry): string {
+  if (isTreeEntry(entry)) return entry.description
+  if ('description' in entry && entry.description) return entry.description
+  return 'staging operation'
+}
+
 const MAX_HISTORY_ENTRIES = 500
 
 interface CacheData {
@@ -64,12 +71,9 @@ export class HunkCacheService {
     const gitDir = this.git.getGitDir()
     this.cachePath = join(gitDir, 'tweezers-cache.json')
     
-    // Debug logging for worktree issues
-    if (process.env.DEBUG) {
-      console.error(`[HunkCacheService] cwd: ${cwd}`)
-      console.error(`[HunkCacheService] gitDir: ${gitDir}`)
-      console.error(`[HunkCacheService] cachePath: ${this.cachePath}`)
-    }
+    logger.debug(`[HunkCacheService] cwd: ${cwd}`)
+    logger.debug(`[HunkCacheService] gitDir: ${gitDir}`)
+    logger.debug(`[HunkCacheService] cachePath: ${this.cachePath}`)
     
     this.cacheData = this.loadCache()
   }

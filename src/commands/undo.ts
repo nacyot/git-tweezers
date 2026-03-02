@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core'
 import { GitWrapper } from '../core/git-wrapper.js'
-import { HunkCacheService, isTreeEntry, isLegacyEntry } from '../services/hunk-cache-service.js'
+import { HunkCacheService, isTreeEntry, isLegacyEntry, getEntryDescription } from '../services/hunk-cache-service.js'
 import { logger, LogLevel } from '../utils/logger.js'
 
 export default class Undo extends Command {
@@ -61,10 +61,8 @@ export default class Undo extends Command {
         const date = new Date(entry.timestamp)
         const timeStr = date.toLocaleString()
         const typeTag = isTreeEntry(entry) ? '' : ' [legacy]'
-        const desc = isTreeEntry(entry)
-          ? entry.description
-          : ('description' in entry ? entry.description : 'No description')
-        this.log(`[${index}] ${timeStr} - ${desc || 'No description'}${typeTag}`)
+        const desc = getEntryDescription(entry)
+        this.log(`[${index}] ${timeStr} - ${desc}${typeTag}`)
       })
 
       return
@@ -111,8 +109,7 @@ export default class Undo extends Command {
       const ok = await this.undoEntry(git, entry)
       if (ok) {
         cache.removeHistoryEntry(flags.step)
-        const desc = isTreeEntry(entry) ? entry.description : ('description' in entry ? entry.description : 'staging operation')
-        logger.success(`Successfully undid: ${desc || 'staging operation'}`)
+        logger.success(`Successfully undid: ${getEntryDescription(entry)}`)
       } else {
         process.exitCode = 1
       }
@@ -132,12 +129,10 @@ export default class Undo extends Command {
       if (ok) {
         cache.removeHistoryEntry(0)
         successCount++
-        const desc = isTreeEntry(entry) ? entry.description : ('description' in entry ? entry.description : 'staging operation')
-        logger.success(`[${i + 1}/${undoCount}] Undid: ${desc || 'staging operation'}`)
+        logger.success(`[${i + 1}/${undoCount}] Undid: ${getEntryDescription(entry)}`)
       } else {
         failCount++
-        const desc = isTreeEntry(entry) ? entry.description : ('description' in entry ? entry.description : 'staging operation')
-        logger.error(`[${i + 1}/${undoCount}] Failed to undo: ${desc || 'staging operation'}`)
+        logger.error(`[${i + 1}/${undoCount}] Failed to undo: ${getEntryDescription(entry)}`)
         // Stop on first failure since subsequent operations may depend on this state
         break
       }
@@ -193,8 +188,8 @@ export default class Undo extends Command {
       return true
     } catch (error) {
       logger.error('Failed to restore index snapshot.')
-      if (process.env.DEBUG === '1' && error instanceof Error) {
-        console.error('Error details:', error.message)
+      if (error instanceof Error) {
+        logger.debug(`Error details: ${error.message}`)
       }
       logger.error('The snapshot may have been garbage collected. Use "git reset" to manually undo.')
       return false
@@ -218,8 +213,8 @@ export default class Undo extends Command {
     } catch (error) {
       logger.warn('This undo entry was created by an older version and may not replay cleanly.')
       logger.error('Failed to undo staging. Use "git reset" to manually undo the changes.')
-      if (process.env.DEBUG === '1' && error instanceof Error) {
-        console.error('Error details:', error.message)
+      if (error instanceof Error) {
+        logger.debug(`Error details: ${error.message}`)
       }
       return false
     }

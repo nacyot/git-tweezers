@@ -103,21 +103,9 @@ export function generateContentFingerprint(
 export function generateHunkId(
   hunk: ParsedHunk,
   filePath: string,
-  existingIds?: Set<string>
 ): string {
   const fingerprint = generateContentFingerprint(hunk, filePath)
-
-  // Start with 8 characters, increase if collision
-  let length = 8
-  let id = fingerprint.substring(0, length)
-  
-  // Handle collisions by increasing length
-  while (existingIds && existingIds.has(id) && length < fingerprint.length) {
-    length++
-    id = fingerprint.substring(0, length)
-  }
-  
-  return id
+  return fingerprint.substring(0, 8)
 }
 
 /**

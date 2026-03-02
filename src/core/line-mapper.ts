@@ -1,5 +1,6 @@
 import type { ExtendedLineChange } from '../types/extended-diff.js'
 import type { ParsedHunk } from './diff-parser.js'
+import { logger } from '../utils/logger.js'
 
 export interface LineMapping {
   lineNumber: number
@@ -127,12 +128,10 @@ export class LineMapper {
     const lineMap = this.mapNewLinesToChanges(hunk)
     const required = new Set<ExtendedLineChange>()
     
-    if (process.env.DEBUG === '1') {
-      console.log('Line mapping for hunk:')
-      lineMap.forEach((change, lineNum) => {
-        console.log(`  Line ${lineNum}: ${change.type} "${change.content}" (eol: ${change.eol})`)
-      })
-    }
+    logger.debug('Line mapping for hunk:')
+    lineMap.forEach((change, lineNum) => {
+      logger.debug(`  Line ${lineNum}: ${change.type} "${change.content}" (eol: ${change.eol})`)
+    })
     
     // First pass: collect directly requested changes
     for (const lineNum of targetLines) {
@@ -166,9 +165,7 @@ export class LineMapper {
               possibleAdd.type === 'AddedLine' &&
               possibleAdd.content === possibleDelete.content) {
             // This is an EOF fix pattern - need both changes
-            if (process.env.DEBUG === '1') {
-              console.log(`Line ${lineNum} requires EOF fix: including "${possibleDelete.content}" delete/add pair`)
-            }
+            logger.debug(`Line ${lineNum} requires EOF fix: including "${possibleDelete.content}" delete/add pair`)
             required.add(possibleDelete)
             required.add(possibleAdd)
           }

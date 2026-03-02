@@ -1,5 +1,6 @@
 import { execa, execaSync, type Options as ExecaOptions } from 'execa'
 import { join } from 'path'
+import { logger } from '../utils/logger.js'
 
 export interface GitOptions extends ExecaOptions {
   cwd?: string
@@ -203,26 +204,19 @@ export class GitWrapper {
       })
       const gitDir = result.stdout.trim()
       
-      // Debug logging
-      if (process.env.DEBUG) {
-        console.error(`[GitWrapper.getGitDir] cwd: ${this.cwd}`)
-        console.error(`[GitWrapper.getGitDir] gitDir from git: ${gitDir}`)
-      }
-      
+      logger.debug(`[GitWrapper.getGitDir] cwd: ${this.cwd}`)
+      logger.debug(`[GitWrapper.getGitDir] gitDir from git: ${gitDir}`)
+
       // If relative path, make it absolute
       if (!gitDir.startsWith('/') && !gitDir.startsWith('\\') && !gitDir.match(/^[A-Z]:/)) {
         const absolutePath = join(this.cwd || process.cwd(), gitDir)
-        if (process.env.DEBUG) {
-          console.error(`[GitWrapper.getGitDir] made absolute: ${absolutePath}`)
-        }
+        logger.debug(`[GitWrapper.getGitDir] made absolute: ${absolutePath}`)
         return absolutePath
       }
       return gitDir
     } catch (error) {
       // Fall back to .git in current directory if git command fails
-      if (process.env.DEBUG) {
-        console.error(`[GitWrapper.getGitDir] git command failed:`, error)
-      }
+      logger.debug(`[GitWrapper.getGitDir] git command failed: ${error}`)
       return join(this.cwd || process.cwd(), '.git')
     }
   }

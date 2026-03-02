@@ -1,5 +1,6 @@
 import type { ExtendedLineChange } from '../types/extended-diff.js'
 import type { FileMetadata } from '../types/hunk-info.js'
+import { logger } from '../utils/logger.js'
 
 export interface HunkData {
   header: string
@@ -116,17 +117,13 @@ export class PatchBuilder {
     const oldStart = parseInt(headerMatch[1], 10)
     const newStart = parseInt(headerMatch[3], 10)
     
-    if (process.env.DEBUG === '1') {
-      console.log(`rebuildHunk: Original hunk has ${originalHunk.changes.length} changes`)
-      console.log(`rebuildHunk: Selected ${selectedExtendedLineChanges.length} changes`)
-    }
+    logger.debug(`rebuildHunk: Original hunk has ${originalHunk.changes.length} changes`)
+    logger.debug(`rebuildHunk: Selected ${selectedExtendedLineChanges.length} changes`)
     
     // Process each change
     for (const change of originalHunk.changes) {
       if (selectedExtendedLineChanges.includes(change)) {
-        if (process.env.DEBUG === '1') {
-          console.log(`  Including selected: ${change.type} "${change.content}" (eol: ${change.eol})`)
-        }
+        logger.debug(`  Including selected: ${change.type} "${change.content}" (eol: ${change.eol})`)
         // Keep this change
         newExtendedLineChanges.push(change)
         
@@ -142,15 +139,11 @@ export class PatchBuilder {
         // Convert add/delete to context
         if (change.type === 'AddedLine') {
           // Skip adds that we don't want to stage
-          if (process.env.DEBUG === '1') {
-            console.log(`  Skipping unselected add: "${change.content}"`)
-          }
+          logger.debug(`  Skipping unselected add: "${change.content}"`)
           continue
         } else if (change.type === 'DeletedLine') {
           // Convert delete to context
-          if (process.env.DEBUG === '1') {
-            console.log(`  Converting delete to context: "${change.content}"`)
-          }
+          logger.debug(`  Converting delete to context: "${change.content}"`)
           newExtendedLineChanges.push({
             ...change,
             type: 'UnchangedLine',
@@ -159,9 +152,7 @@ export class PatchBuilder {
           newCount++
         } else {
           // Keep context lines
-          if (process.env.DEBUG === '1') {
-            console.log(`  Keeping context: "${change.content}"`)
-          }
+          logger.debug(`  Keeping context: "${change.content}"`)
           newExtendedLineChanges.push(change)
           oldCount++
           newCount++

@@ -6,6 +6,7 @@ import type { ExtendedLineChange } from '../types/extended-diff.js'
 import type { HunkInfo } from '../types/hunk-info.js'
 import { HunkCacheService } from './hunk-cache-service.js'
 import { StagingError } from '../utils/staging-error.js'
+import { logger } from '../utils/logger.js'
 
 export interface StageOptions {
   precise?: boolean // Use U0 context for finer control
@@ -27,31 +28,84 @@ export class StagingService {
   }
 
   /**
-   * List all hunks in a file
+   * Ensure a file is trackable: reject binary files, auto-add untracked files.
    */
-  async listHunks(filePath: string, options?: StageOptions): Promise<string[]> {
-    const hunks = await this.listHunksWithInfo(filePath, options)
-    return hunks.map((hunk) => 
-      `Hunk ${hunk.index}: ${hunk.header}`
-    )
+  private async ensureTrackable(filePath: string, operation: string): Promise<void> {
+    const isBinary = await this.git.isBinary(filePath)
+    if (isBinary) {
+      throw new Error(`Cannot ${operation} binary file: ${filePath}`)
+    }
+    const isUntracked = await this.git.isUntracked(filePath)
+    if (isUntracked) {
+      await this.git.addIntentToAdd(filePath)
+    }
+  }
+
+  /**
+   * Log the patch and return true if this is a dry-run (caller should return early).
+   */
+  private dryRunGuard(patch: string, options?: StageOptions): boolean {
+    if (options?.dryRun) {
+      console.log('Generated patch:')
+      console.log(patch)
+      console.log('\n[DRY RUN] The above patch would be applied to the staging area.')
+      return true
+    }
+    logger.debug(`Generated patch:\n${patch}`)
+    return false
+  }
+
+  /**
+   * Snapshot index, apply patch, and record history in one step.
+   */
+  private async commitStaging(
+    patch: string,
+    applyOptions: string[],
+    description: string,
+    affectedFiles: string[],
+  ): Promise<void> {
+    const treeSha = await this.snapshotIndex()
+    await this.git.applyWithOptions(patch, applyOptions)
+    await this.recordHistory(treeSha, description, affectedFiles)
+  }
+
+  /**
+   * Throw a StagingError with available hunks info when a selector is not found.
+   */
+  private throwHunkNotFound(
+    message: string, hunks: HunkInfo[], filePath: string, options?: StageOptions
+  ): never {
+    const mode = options?.precise ? 'precise' : 'normal'
+    const modeFlag = options?.precise ? ' -p' : ''
+    throw new StagingError(message, hunks, {
+      mode: mode as 'normal' | 'precise',
+      filePath,
+      suggestCommand: `npx git-tweezers list${modeFlag} ${filePath}`,
+    })
+  }
+
+  /**
+   * Get diff for a file, parse it, and find the file entry.
+   */
+  private async getDiffForFile(filePath: string, context: number) {
+    const diff = await this.git.diff(filePath, context)
+    if (!diff) {
+      throw new Error(`No changes found for file: ${filePath}`)
+    }
+    const files = this.parser.parseFilesWithInfo(diff)
+    const file = files.find(f => f.newPath === filePath || f.oldPath === filePath)
+    if (!file) {
+      throw new Error(`File not found in diff: ${filePath}`)
+    }
+    return { file, diff }
   }
 
   /**
    * List all hunks with full information
    */
   async listHunksWithInfo(filePath: string, options?: StageOptions): Promise<HunkInfo[]> {
-    // Check if file is binary
-    const isBinary = await this.git.isBinary(filePath)
-    if (isBinary) {
-      throw new Error(`Cannot list hunks for binary file: ${filePath}`)
-    }
-    
-    // Check if file is untracked and handle it
-    const isUntracked = await this.git.isUntracked(filePath)
-    if (isUntracked) {
-      await this.git.addIntentToAdd(filePath)
-    }
-    
+    await this.ensureTrackable(filePath, 'list hunks for')
+
     const context = options?.precise ? 0 : 3
     
     // Get both staged and unstaged diffs
@@ -95,57 +149,27 @@ export class StagingService {
    * Stage a specific hunk by index (1-based) or ID
    */
   async stageHunk(filePath: string, hunkSelector: number | string, options?: StageOptions): Promise<void> {
-    // Check if file is binary
-    const isBinary = await this.git.isBinary(filePath)
-    if (isBinary) {
-      throw new Error(`Cannot stage hunks for binary file: ${filePath}`)
-    }
-    
-    // Check if file is untracked and handle it
-    const isUntracked = await this.git.isUntracked(filePath)
-    if (isUntracked) {
-      await this.git.addIntentToAdd(filePath)
-    }
-    
+    await this.ensureTrackable(filePath, 'stage hunks for')
+
     const context = options?.precise ? 0 : 3
-    const diff = await this.git.diff(filePath, context)
-    
-    if (!diff) {
-      throw new Error(`No changes found for file: ${filePath}`)
-    }
-    
-    const files = this.parser.parseFilesWithInfo(diff)
-    const file = files.find(f => f.newPath === filePath || f.oldPath === filePath)
-    
-    if (!file) {
-      throw new Error(`File not found in diff: ${filePath}`)
-    }
-    
+    const { file } = await this.getDiffForFile(filePath, context)
+
     // Map hunks with cache
     const hunks = this.cache.mapHunks(filePath, file.hunks)
     
-    if (process.env.DEBUG === '1') {
-      console.log(`Looking for hunk selector: "${hunkSelector}"`)
-      console.log(`Available hunks:`, hunks.map(h => ({ index: h.index, id: h.id })))
-    }
+    logger.debug(`Looking for hunk selector: "${hunkSelector}"`)
+    logger.debug(`Available hunks: ${JSON.stringify(hunks.map(h => ({ index: h.index, id: h.id })))}`)
     
     // Find the hunk by selector
     const hunk = this.cache.findHunk(hunks, hunkSelector)
     
     if (!hunk) {
-      const mode = options?.precise ? 'precise' : 'normal'
-      const modeFlag = options?.precise ? ' -p' : ''
-      throw new StagingError(
+      this.throwHunkNotFound(
         `Hunk '${hunkSelector}' not found. File has ${hunks.length} hunk${hunks.length === 1 ? '' : 's'}.`,
-        hunks,
-        {
-          mode: mode as 'normal' | 'precise',
-          filePath,
-          suggestCommand: `npx git-tweezers list${modeFlag} ${filePath}`
-        }
+        hunks, filePath, options,
       )
     }
-    
+
     const fileData = {
       oldPath: file.oldPath,
       newPath: file.newPath,
@@ -156,27 +180,10 @@ export class StagingService {
     }
     
     const patch = this.builder.buildPatch([fileData])
-    
-    if (process.env.DEBUG === '1' || options?.dryRun) {
-      console.log('Generated patch:')
-      console.log(patch)
-    }
-    
-    // In dry-run mode, skip applying the patch
-    if (options?.dryRun) {
-      console.log('\n[DRY RUN] The above patch would be applied to the staging area.')
-      return
-    }
-    
-    // Snapshot before mutation
-    const treeSha = await this.snapshotIndex()
+    if (this.dryRunGuard(patch, options)) return
 
-    // Apply the patch
     const applyOptions = options?.precise ? ['--cached', '--unidiff-zero'] : ['--cached']
-    await this.git.applyWithOptions(patch, applyOptions)
-
-    // Record in history
-    await this.recordHistory(treeSha, `Stage hunk ${hunkSelector} from ${filePath}`, [filePath])
+    await this.commitStaging(patch, applyOptions, `Stage hunk ${hunkSelector} from ${filePath}`, [filePath])
   }
 
   /**
@@ -188,31 +195,10 @@ export class StagingService {
     endLine: number,
     _options?: StageOptions
   ): Promise<void> {
-    // Check if file is binary
-    const isBinary = await this.git.isBinary(filePath)
-    if (isBinary) {
-      throw new Error(`Cannot stage lines for binary file: ${filePath}`)
-    }
-    
-    // Check if file is untracked and handle it
-    const isUntracked = await this.git.isUntracked(filePath)
-    if (isUntracked) {
-      await this.git.addIntentToAdd(filePath)
-    }
-    
+    await this.ensureTrackable(filePath, 'stage lines for')
+
     // For line-level staging, use U1 for better reliability
-    const diff = await this.git.diff(filePath, 1)
-    
-    if (!diff) {
-      throw new Error(`No changes found for file: ${filePath}`)
-    }
-    
-    const files = this.parser.parseFiles(diff)
-    const file = files.find(f => f.newPath === filePath || f.oldPath === filePath)
-    
-    if (!file) {
-      throw new Error(`File not found in diff: ${filePath}`)
-    }
+    const { file } = await this.getDiffForFile(filePath, 1)
     
     // Collect target line numbers
     const targetLines = new Set<number>()
@@ -227,11 +213,9 @@ export class StagingService {
       const requiredChanges = LineMapper.getRequiredChanges(hunk, targetLines)
       
       if (requiredChanges.length > 0) {
-        if (process.env.DEBUG === '1') {
-          console.log(`Hunk ${hunk.header}: Selected ${requiredChanges.length} changes`)
-          requiredChanges.forEach(c => console.log(`  ${c.type}: "${c.content}" (eol: ${c.eol})`))
-        }
-        
+        logger.debug(`Hunk ${hunk.header}: Selected ${requiredChanges.length} changes`)
+        requiredChanges.forEach(c => logger.debug(`  ${c.type}: "${c.content}" (eol: ${c.eol})`))
+
         allSelectedChanges.push(...requiredChanges)
       }
     }
@@ -269,46 +253,20 @@ export class StagingService {
     }
     
     const patch = this.builder.buildPatch([fileData])
-    
-    if (process.env.DEBUG === '1' || _options?.dryRun) {
-      console.log('Generated patch:')
-      console.log(patch)
-    }
-    
-    // In dry-run mode, skip applying the patch
-    if (_options?.dryRun) {
-      console.log('\n[DRY RUN] The above patch would be applied to the staging area.')
-      return
-    }
-    
-    // Snapshot before mutation
-    const treeSha = await this.snapshotIndex()
+    if (this.dryRunGuard(patch, _options)) return
 
-    // Apply with recount option for better reliability
-    await this.git.applyWithOptions(patch, ['--cached', '--recount'])
-
-    // Record in history
-    await this.recordHistory(treeSha, `Stage lines ${startLine}-${endLine} from ${filePath}`, [filePath])
+    await this.commitStaging(patch, ['--cached', '--recount'], `Stage lines ${startLine}-${endLine} from ${filePath}`, [filePath])
   }
 
   /**
    * Stage multiple hunks at once
    */
   async stageHunks(filePath: string, hunkSelectors: Array<number | string>, options?: StageOptions): Promise<void> {
+    await this.ensureTrackable(filePath, 'stage hunks for')
+
     const context = options?.precise ? 0 : 3
-    const diff = await this.git.diff(filePath, context)
-    
-    if (!diff) {
-      throw new Error(`No changes found for file: ${filePath}`)
-    }
-    
-    const files = this.parser.parseFilesWithInfo(diff)
-    const file = files.find(f => f.newPath === filePath || f.oldPath === filePath)
-    
-    if (!file) {
-      throw new Error(`File not found in diff: ${filePath}`)
-    }
-    
+    const { file } = await this.getDiffForFile(filePath, context)
+
     // Map hunks with cache
     const hunks = this.cache.mapHunks(filePath, file.hunks)
     
@@ -326,16 +284,9 @@ export class StagingService {
     }
     
     if (notFoundSelectors.length > 0) {
-      const mode = options?.precise ? 'precise' : 'normal'
-      const modeFlag = options?.precise ? ' -p' : ''
-      throw new StagingError(
+      this.throwHunkNotFound(
         `Hunks not found: ${notFoundSelectors.join(', ')}. File has ${hunks.length} hunk${hunks.length === 1 ? '' : 's'}.`,
-        hunks,
-        {
-          mode: mode as 'normal' | 'precise',
-          filePath,
-          suggestCommand: `npx git-tweezers list${modeFlag} ${filePath}`
-        }
+        hunks, filePath, options,
       )
     }
 
@@ -362,17 +313,7 @@ export class StagingService {
     }
 
     const patch = this.builder.buildPatch([fileData])
-
-    if (process.env.DEBUG === '1' || options?.dryRun) {
-      console.log('Generated patch:')
-      console.log(patch)
-    }
-
-    // In dry-run mode, skip applying the patch
-    if (options?.dryRun) {
-      console.log('\n[DRY RUN] The above patch would be applied to the staging area.')
-      return
-    }
+    if (this.dryRunGuard(patch, options)) return
 
     // Snapshot before mutation
     const treeSha = await this.snapshotIndex()
@@ -388,9 +329,7 @@ export class StagingService {
     } catch {
       // Combined patch failed (e.g., overlapping context or offset drift with many hunks).
       // Fall back to sequential per-hunk application with re-diffing between each.
-      if (process.env.DEBUG === '1') {
-        console.log('Combined patch failed, falling back to sequential hunk application')
-      }
+      logger.debug('Combined patch failed, falling back to sequential hunk application')
       await this.stageHunksSequentially(filePath, selectedHunks, file, options)
     }
 
@@ -422,10 +361,7 @@ export class StagingService {
       const freshDiff = await this.git.diff(filePath, context)
 
       if (!freshDiff) {
-        // No more changes remain for this file
-        if (process.env.DEBUG === '1') {
-          console.log(`No more changes for ${filePath}, stopping sequential application`)
-        }
+        logger.debug(`No more changes for ${filePath}, stopping sequential application`)
         break
       }
 
@@ -433,9 +369,7 @@ export class StagingService {
       const freshFile = freshFiles.find(f => f.newPath === filePath || f.oldPath === filePath)
 
       if (!freshFile) {
-        if (process.env.DEBUG === '1') {
-          console.log(`File ${filePath} no longer in diff, stopping sequential application`)
-        }
+        logger.debug(`File ${filePath} no longer in diff, stopping sequential application`)
         break
       }
 
@@ -448,9 +382,7 @@ export class StagingService {
       if (!hunk) {
         // Hunk may have been absorbed into an adjacent hunk after a previous
         // application caused git to merge nearby hunks. Skip gracefully.
-        if (process.env.DEBUG === '1') {
-          console.log(`Hunk ${id} no longer found after previous applications, skipping`)
-        }
+        logger.debug(`Hunk ${id} no longer found after previous applications, skipping`)
         continue
       }
 
@@ -462,10 +394,7 @@ export class StagingService {
 
       const singlePatch = this.builder.buildPatch([singleFileData])
 
-      if (process.env.DEBUG === '1') {
-        console.log(`Generated patch for hunk ${id}:`)
-        console.log(singlePatch)
-      }
+      logger.debug(`Generated patch for hunk ${id}:\n${singlePatch}`)
 
       const applyOptions = options?.precise
         ? ['--cached', '--unidiff-zero']
@@ -475,10 +404,7 @@ export class StagingService {
         await this.git.applyWithOptions(singlePatch, applyOptions)
       } catch (error) {
         // Per-hunk error handling: log and continue with remaining hunks
-        if (process.env.DEBUG === '1') {
-          console.log(`Failed to apply hunk ${id}: ${error instanceof Error ? error.message : error}`)
-        }
-        // Continue with next hunk rather than aborting the entire operation
+        logger.debug(`Failed to apply hunk ${id}: ${error instanceof Error ? error.message : error}`)
       }
     }
   }
@@ -510,23 +436,4 @@ export class StagingService {
     }
   }
 
-  /**
-   * Get the count of hunks for a file
-   */
-  async getHunkCount(filePath: string, options?: StageOptions): Promise<number> {
-    // Check if file is untracked and handle it
-    const isUntracked = await this.git.isUntracked(filePath)
-    if (isUntracked) {
-      await this.git.addIntentToAdd(filePath)
-    }
-    
-    const context = options?.precise ? 0 : 3
-    const diff = await this.git.diff(filePath, context)
-    
-    if (!diff) {
-      return 0
-    }
-    
-    return this.parser.getFileHunkCount(diff, filePath)
-  }
 }

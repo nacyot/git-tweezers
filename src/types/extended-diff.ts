@@ -10,17 +10,3 @@ export type ExtendedLineChange = AnyLineChange & {
    */
   eol: boolean
 }
-
-/**
- * Helper to determine if a line has EOL based on raw diff content
- */
-export function hasEOL(line: string, isLastLine: boolean, nextLine?: string): boolean {
-  // If it's not the last line, it has EOL
-  if (!isLastLine) return true
-  
-  // If the next line is "\ No newline at end of file", this line doesn't have EOL
-  if (nextLine?.startsWith('\\ No newline at end of file')) return false
-  
-  // Otherwise, it has EOL
-  return true
-}
