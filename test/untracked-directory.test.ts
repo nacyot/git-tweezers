@@ -79,7 +79,7 @@ describe('Untracked Directory Support', () => {
       )
       
       // List hunks for the untracked file
-      const hunks = await stagingService.listHunks('deep/nested/path/file.txt')
+      const hunks = await stagingService.listHunksWithInfo('deep/nested/path/file.txt')
       expect(hunks.length).toBeGreaterThan(0)
       
       // Stage the hunk
@@ -191,7 +191,7 @@ describe('Untracked Directory Support', () => {
       const files = await git.getChangedFiles()
       expect(files).toContain(join(deepPath, 'deep-file.md'))
       
-      const hunks = await stagingService.listHunks(join(deepPath, 'deep-file.md'))
+      const hunks = await stagingService.listHunksWithInfo(join(deepPath, 'deep-file.md'))
       expect(hunks.length).toBe(1)
     })
   })

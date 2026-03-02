@@ -48,7 +48,7 @@ describe('Binary File Handling', () => {
       // Mock the git.isBinary method on the private git instance
       vi.spyOn(stagingService['git'], 'isBinary').mockResolvedValue(true)
       
-      await expect(stagingService.listHunks('binary.dat')).rejects.toThrow(
+      await expect(stagingService.listHunksWithInfo('binary.dat')).rejects.toThrow(
         'Cannot list hunks for binary file: binary.dat'
       )
     })

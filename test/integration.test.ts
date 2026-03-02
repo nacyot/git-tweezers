@@ -43,7 +43,7 @@ describe('Integration Tests', () => {
       await writeFile(filePath, lines.join('\n') + '\n')
       
       // List hunks
-      const hunks = await stagingService.listHunks('test.txt')
+      const hunks = await stagingService.listHunksWithInfo('test.txt')
       expect(hunks.length).toBe(2)
       
       // Stage first hunk
@@ -140,7 +140,7 @@ describe('Integration Tests', () => {
       await writeFile(filePath, 'New line 1\nNew line 2\nNew line 3\n')
       
       // List hunks for untracked file
-      const hunks = await stagingService.listHunks('new-file.txt')
+      const hunks = await stagingService.listHunksWithInfo('new-file.txt')
       expect(hunks.length).toBeGreaterThan(0)
       
       // Stage specific lines from untracked file
@@ -171,7 +171,7 @@ describe('Integration Tests', () => {
       
       // Try to list hunks
       await expect(
-        stagingService.listHunks('binary.dat')
+        stagingService.listHunksWithInfo('binary.dat')
       ).rejects.toThrow('Cannot list hunks for binary file')
     })
   })
