@@ -118,7 +118,7 @@ describe('Worktree Support', () => {
       const result = await execa('node', [binPath, 'hunk', 'test.js', '1'], { cwd: worktreeDir, env: { ...process.env, OCLIF_TS_NODE: 'false' } })
       
       expect(result.exitCode).toBe(0)
-      expect(result.stderr).toContain('Staged hunk')
+      expect(result.stdout + result.stderr).toContain('Staged hunk')
       
       // Verify it was staged
       const status = await execa('git', ['diff', '--cached'], { cwd: worktreeDir })

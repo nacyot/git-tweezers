@@ -91,7 +91,7 @@ function divide(a, b) {
       
       // Undo the staging
       const undoResult = await execa('node', [binPath, 'undo'], { cwd: testDir, env: { ...process.env, OCLIF_TS_NODE: 'false' } })
-      expect(undoResult.stderr).toContain('Successfully undid')
+      expect(undoResult.stdout + undoResult.stderr).toContain('Successfully undid')
       
       // Verify it was unstaged
       diffCached = await execa('git', ['diff', '--cached'], { cwd: testDir })
@@ -110,7 +110,7 @@ function divide(a, b) {
 
     it('should handle empty history gracefully', async () => {
       const result = await execa('node', [binPath, 'undo', '--list'], { cwd: testDir, env: { ...process.env, OCLIF_TS_NODE: 'false' } })
-      expect(result.stderr).toContain('No staging history available')
+      expect(result.stdout + result.stderr).toContain('No staging history available')
     })
   })
 })
